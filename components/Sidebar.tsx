@@ -42,6 +42,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isMobile = window.innerWidth < 1024;
+
   const handleDragStart = (idx: number) => setDraggedIdx(idx);
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
@@ -57,7 +59,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     setDraggedIdx(idx);
   };
 
-  if (!isOpen) {
+  // Only show thin strip on non-mobile devices
+  if (!isOpen && !isMobile) {
     return (
       <div className="hidden lg:flex w-full sidebar-container bg-white dark:bg-dark-surface border-r dark:border-dark-border flex-col items-center py-4 gap-6 h-full transition-all shrink-0">
         <button onClick={onToggle} title="Expand Library" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronRight size={20} /></button>
@@ -88,7 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           ))}
         </div>
-        <button onClick={onToggle} title="Collapse Library" className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronLeft size={18} /></button>
+        {!isMobile && <button onClick={onToggle} title="Collapse Library" className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronLeft size={18} /></button>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
@@ -245,7 +248,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Modals */}
+      {/* Modals remain same but use z-[100] for mobile overlap */}
       {editingProfile && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingProfile(null)}>
           <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 border dark:border-slate-700" onClick={e => e.stopPropagation()}>

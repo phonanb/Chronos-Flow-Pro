@@ -15,7 +15,9 @@ interface DetailPanelProps {
 }
 
 const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories, resources, onUpdate, onClose, isOpen, onToggle }) => {
-  if (!isOpen) {
+  const isMobile = window.innerWidth < 1024;
+
+  if (!isOpen && !isMobile) {
     return (
       <div className="hidden lg:flex w-full h-full bg-white dark:bg-dark-surface border dark:border-dark-border rounded-3xl flex-col items-center py-6 gap-8 shadow-sm">
         <button onClick={onToggle} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500"><ChevronLeft size={20} /></button>
@@ -38,8 +40,8 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
   );
 
   if (!block) return (
-    <div className="w-full h-full bg-white dark:bg-dark-surface border dark:border-dark-border rounded-3xl flex flex-col items-center justify-center text-center p-12 text-slate-400 relative shadow-sm">
-      <button onClick={onToggle} className="absolute top-6 left-6 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"><ChevronRight size={18} /></button>
+    <div className="w-full h-full bg-white dark:bg-dark-surface flex flex-col items-center justify-center text-center p-8 text-slate-400 relative">
+      {!isMobile && <button onClick={onToggle} className="absolute top-6 left-6 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"><ChevronRight size={18} /></button>}
       <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-full mb-6 border dark:border-slate-800"><CheckCircle2 size={40} className="text-slate-200 dark:text-slate-700" /></div>
       <p className="font-bold text-xs uppercase tracking-widest leading-loose">Select a system unit<br/>to begin configuration</p>
     </div>
@@ -49,16 +51,16 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
   const successors = allBlocks.filter(b => b.dependencies.includes(block.id));
 
   return (
-    <div className="w-full h-full bg-white dark:bg-dark-surface border dark:border-dark-border rounded-3xl flex flex-col overflow-hidden shadow-xl lg:shadow-sm border-indigo-100 dark:border-indigo-900/20">
-      <div className="p-5 border-b dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
+    <div className="w-full h-full bg-white dark:bg-dark-surface flex flex-col overflow-hidden">
+      <div className="p-4 border-b dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
         <div className="flex items-center gap-3">
-           <button onClick={onToggle} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors"><ChevronRight size={18} /></button>
+           {!isMobile && <button onClick={onToggle} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors"><ChevronRight size={18} /></button>}
            <h2 className="font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tighter text-sm">Unit Inspector</h2>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-slate-400 hover:text-red-500 transition-colors"><X size={18} /></button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-8 custom-scrollbar">
         <section>
           <SectionLabel icon={Layout}>General Definition</SectionLabel>
           <div className="space-y-4">
@@ -126,7 +128,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
         </section>
       </div>
 
-      <div className="p-5 border-t dark:border-dark-border bg-slate-50/50 dark:bg-slate-800/20">
+      <div className="p-4 lg:p-5 border-t dark:border-dark-border bg-slate-50/50 dark:bg-slate-800/20">
           <button onClick={() => onUpdate({...block, isLocked: !block.isLocked})} className={`w-full py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] transition-all shadow-lg ${block.isLocked ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shadow-amber-500/10' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:scale-[1.02] active:scale-95'}`}>
             {block.isLocked ? 'Unlock Logic' : 'Lock Configuration'}
           </button>

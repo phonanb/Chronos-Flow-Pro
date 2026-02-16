@@ -47,6 +47,8 @@ const Timeline: React.FC<TimelineProps> = ({
   
   const currentPPM = PIXELS_PER_MINUTE * zoom;
   const laneSize = 160 * zoom; 
+  // Standardized header size to match Tailwind h-16 / w-16 (64px)
+  const HEADER_OFFSET = 64;
 
   const startDrag = (clientX: number, clientY: number, block: TimeBlock) => {
     if (block.isLocked) return;
@@ -80,9 +82,13 @@ const Timeline: React.FC<TimelineProps> = ({
     const block = blocks.find(b => b.id === draggingBlock.id);
     if (!block) return;
 
+    // Time Axis Movement (Snap to 15 mins)
+    // In Landscape: X is time. In Portrait: Y is time.
     const timeDelta = Math.round((isLandscape ? deltaX : deltaY) / currentPPM / 15) * 15;
     const newStart = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - block.duration, draggingBlock.initialStart + timeDelta));
     
+    // Lane Axis Movement
+    // In Landscape: Y is lane. In Portrait: X is lane.
     const laneDelta = Math.round((isLandscape ? deltaY : deltaX) / laneSize);
     const newLane = Math.max(0, draggingBlock.initialLane + laneDelta);
 
@@ -139,8 +145,8 @@ const Timeline: React.FC<TimelineProps> = ({
         const depTimePos = (dep.startTime - START_HOUR * 60) * currentPPM;
         const depSize = dep.duration * currentPPM;
         const blockTimePos = (block.startTime - START_HOUR * 60) * currentPPM;
-        const depLanePos = (isLandscape ? (64 * zoom) : 64) + (dep.lane * laneSize);
-        const blockLanePos = (isLandscape ? (64 * zoom) : 64) + (block.lane * laneSize);
+        const depLanePos = HEADER_OFFSET + (dep.lane * laneSize);
+        const blockLanePos = HEADER_OFFSET + (block.lane * laneSize);
 
         let xStart, yStart, xEnd, yEnd;
         if (!isLandscape) {
@@ -182,7 +188,6 @@ const Timeline: React.FC<TimelineProps> = ({
     ? (getMaxLane(blocks) + 1) * laneSize + (100 * zoom)
     : (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom);
 
-  // Background grid calculations
   const gridW = isLandscape ? (60 * currentPPM) : laneSize;
   const gridH = isLandscape ? laneSize : (60 * currentPPM);
 
@@ -198,15 +203,11 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
         <div className="flex items-center gap-2 lg:gap-4">
            {resourceConflicts.size > 0 && (
-             <div className="hidden sm:flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-red-100 dark:border-red-900/40">
-               <Boxes size={12} className="animate-bounce" /> CONFLICT
+             <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 px-2 lg:px-3 py-1 lg:py-1.5 rounded-xl text-[9px] lg:text-[10px] font-bold border border-red-100 dark:border-red-900/40 uppercase tracking-widest">
+               Conflict
              </div>
            )}
-           <button 
-             onClick={onToggleFullScreen}
-             className="p-2 lg:p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
-             title={isFullScreen ? "Exit Full Screen" : "Enter Full Screen Workspace"}
-           >
+           <button onClick={onToggleFullScreen} className="p-2 lg:p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl text-slate-500 transition-all shadow-sm">
              {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
            </button>
         </div>
@@ -217,8 +218,8 @@ const Timeline: React.FC<TimelineProps> = ({
         className="flex-1 overflow-auto custom-scrollbar relative timeline-grid" 
         style={{ 
           backgroundSize: `${gridW}px ${gridH}px`,
-          // Ensure grid starts exactly at the header alignment
-          backgroundPosition: `${isLandscape ? 0 : 0}px ${isLandscape ? (64 * zoom) : 0}px` 
+          // Align background position exactly to header size
+          backgroundPosition: `${isLandscape ? 0 : HEADER_OFFSET}px ${isLandscape ? HEADER_OFFSET : 0}px` 
         }}
       >
         <div style={{ width: contentWidth, height: contentHeight, minWidth: '100%', minHeight: '100%' }} className="relative">
@@ -227,7 +228,7 @@ const Timeline: React.FC<TimelineProps> = ({
           <div className={`${isLandscape ? "flex" : "flex flex-col"} sticky top-0 left-0 z-40`}>
             {hours.map(hour => (
               <div key={hour} className="relative" style={{ [isLandscape ? 'width' : 'height']: 60 * currentPPM }}>
-                <div className={`${isLandscape ? "w-full text-center py-2 h-[64px]" : "w-16 h-full flex items-center justify-end pr-3"} text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border`}>
+                <div className={`${isLandscape ? "w-full text-center py-2 h-16" : "w-16 h-full flex items-center justify-end pr-3"} text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border`}>
                   {formatTime(hour * 60)}
                 </div>
               </div>
@@ -238,7 +239,7 @@ const Timeline: React.FC<TimelineProps> = ({
             {blocks.map(block => {
               const timePos = (block.startTime - START_HOUR * 60) * currentPPM;
               const timeSize = block.duration * currentPPM;
-              const lanePos = (isLandscape ? (64 * zoom) : 64) + (block.lane * laneSize);
+              const lanePos = HEADER_OFFSET + (block.lane * laneSize);
               const isSelected = selectedBlockId === block.id;
               const category = categories.find(c => c.id === block.categoryId);
               const colorClass = COLOR_MAP[category?.color || 'slate'];
@@ -254,35 +255,29 @@ const Timeline: React.FC<TimelineProps> = ({
                   key={block.id}
                   onMouseDown={(e) => handleMouseDown(e, block)}
                   onTouchStart={(e) => handleTouchStart(e, block)}
-                  title={block.title}
-                  className={`absolute rounded-xl border-l-[6px] p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden
+                  className={`absolute rounded-xl border-l-[6px] p-2 sm:p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden
                     ${colorClass} 
-                    ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-dark-surface z-50 scale-[1.01] shadow-xl' : 'z-30 hover:shadow-lg hover:translate-y-[-1px]'}
+                    ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 z-50 scale-[1.01] shadow-xl' : 'z-30 hover:shadow-lg'}
                     ${hasResourceConflict ? 'border-red-500 ring-2 ring-red-500/20' : ''}
-                    ${block.isLocked ? 'cursor-not-allowed opacity-90 grayscale-[0.2]' : ''}
+                    ${block.isLocked ? 'cursor-not-allowed opacity-90' : ''}
                   `}
                   style={{...style, touchAction: 'none'}}
                 >
                   <div className="flex flex-col justify-between h-full">
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold truncate leading-tight flex items-center gap-1.5" style={{ fontSize: `${fontSize * zoom}px` }}>
-                          {block.title}
-                          {block.isLocked && <Info size={10 * zoom} className="text-slate-500" />}
-                        </h3>
-                        <p className="text-[9px] font-bold opacity-40 uppercase tracking-tighter truncate">{category?.name}</p>
+                        <h3 className="font-bold truncate leading-tight" style={{ fontSize: `${Math.max(10, fontSize * zoom)}px` }}>{block.title}</h3>
+                        <p className="text-[8px] sm:text-[9px] font-bold opacity-40 uppercase truncate">{category?.name}</p>
                       </div>
-                      <div className="flex gap-1 opacity-0 lg:group-hover:opacity-100 transition-opacity no-print">
-                        {isPart && !block.isLocked && <button onClick={(e) => { e.stopPropagation(); onMergeBlocks(block.id); }} title="Merge parts" className="p-2 lg:p-1 hover:bg-white/50 rounded transition-colors text-indigo-600"><Merge size={14 * zoom} /></button>}
-                        {!isPart && !block.isLocked && <button onClick={(e) => { e.stopPropagation(); onSplitBlock(block.id); }} title="Split block" className="p-2 lg:p-1 hover:bg-white/50 rounded transition-colors"><Scissors size={14 * zoom} /></button>}
-                        <button onClick={(e) => { e.stopPropagation(); onDeleteBlock(block.id); }} title="Delete block" className="p-2 lg:p-1 hover:bg-white/50 rounded transition-colors"><Trash2 size={14 * zoom} /></button>
+                      <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity no-print">
+                        {isPart && !block.isLocked && <button onClick={(e) => { e.stopPropagation(); onMergeBlocks(block.id); }} className="p-1 hover:bg-white/50 rounded text-indigo-600"><Merge size={14 * zoom} /></button>}
+                        {!isPart && !block.isLocked && <button onClick={(e) => { e.stopPropagation(); onSplitBlock(block.id); }} className="p-1 hover:bg-white/50 rounded"><Scissors size={14 * zoom} /></button>}
+                        <button onClick={(e) => { e.stopPropagation(); onDeleteBlock(block.id); }} className="p-1 hover:bg-white/50 rounded"><Trash2 size={14 * zoom} /></button>
                       </div>
                     </div>
                     <div className="flex justify-between items-end">
-                       <p className="font-mono font-bold opacity-60 tracking-tight" style={{ fontSize: `${fontSize * 0.7 * zoom}px` }}>
-                          {formatTime(block.startTime)} • {block.duration}m
-                       </p>
-                       {hasResourceConflict && <Boxes size={14 * zoom} className="text-red-600 dark:text-red-400 animate-pulse" />}
+                       <p className="font-mono font-bold opacity-60 text-[9px]">{formatTime(block.startTime)} • {block.duration}m</p>
+                       {hasResourceConflict && <Boxes size={14 * zoom} className="text-red-600 animate-pulse" />}
                     </div>
                   </div>
                 </div>
