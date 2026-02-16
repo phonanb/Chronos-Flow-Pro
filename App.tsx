@@ -31,9 +31,10 @@ const App: React.FC = () => {
   const [orientation, setOrientation] = useState<Orientation>(() => loadState('cfp_orientation', 'landscape'));
   const [zoom, setZoom] = useState(() => loadState('cfp_zoom', 1.0));
   const [mobileTab, setMobileTab] = useState<MobileTab>('timeline');
+  const [isCenterFullScreen, setIsCenterFullScreen] = useState(false);
   
-  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1200);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1400);
 
   useEffect(() => {
     localStorage.setItem('cfp_blocks', JSON.stringify(blocks));
@@ -82,7 +83,6 @@ const App: React.FC = () => {
     if (!block) return;
 
     const blockEndTime = block.startTime + block.duration;
-    // Simple split at mid-point if no lunch rule overlap, otherwise split around lunch
     const splitPoint = (lunchRule.enabled && block.startTime < lunchRule.endTime && blockEndTime > lunchRule.startTime)
       ? lunchRule.startTime
       : block.startTime + Math.floor(block.duration / 2);
@@ -95,17 +95,21 @@ const App: React.FC = () => {
       return;
     }
 
+    const originalTitle = block.originalTitle || block.title;
+
     const part1: TimeBlock = {
       ...block,
       id: Math.random().toString(36).substr(2, 9),
-      title: `${block.title} (Part A)`,
+      title: `${originalTitle} (Part A)`,
+      originalTitle: originalTitle,
       duration: firstDuration
     };
 
     const part2: TimeBlock = {
       ...block,
       id: Math.random().toString(36).substr(2, 9),
-      title: `${block.title} (Part B)`,
+      title: `${originalTitle} (Part B)`,
+      originalTitle: originalTitle,
       startTime: lunchRule.enabled && splitPoint === lunchRule.startTime ? lunchRule.endTime : splitPoint,
       duration: secondDuration,
       dependencies: [...block.dependencies, part1.id]
@@ -113,6 +117,28 @@ const App: React.FC = () => {
 
     setBlocks(prev => [...prev.filter(b => b.id !== blockId), part1, part2]);
     setSelectedBlockId(part2.id);
+  };
+
+  const handleMergeBlocks = (blockId: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block || !block.originalTitle) return;
+
+    const partner = blocks.find(b => b.id !== block.id && b.originalTitle === block.originalTitle);
+    if (!partner) return;
+
+    const first = block.startTime < partner.startTime ? block : partner;
+    const second = block.startTime < partner.startTime ? partner : block;
+
+    const mergedBlock: TimeBlock = {
+      ...first,
+      id: Math.random().toString(36).substr(2, 9),
+      title: first.originalTitle || first.title.replace(' (Part A)', '').replace(' (Part B)', ''),
+      duration: (second.startTime + second.duration) - first.startTime,
+      dependencies: first.dependencies.filter(d => d !== second.id)
+    };
+
+    setBlocks(prev => [...prev.filter(b => b.id !== block.id && b.id !== partner.id), mergedBlock]);
+    setSelectedBlockId(mergedBlock.id);
   };
 
   const handleImportCFP = (file: File) => {
@@ -137,41 +163,46 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-slate-100 flex flex-col overflow-hidden select-none transition-colors duration-300">
-      <nav className="h-14 lg:h-16 bg-white dark:bg-dark-surface border-b dark:border-dark-border px-4 lg:px-6 flex items-center justify-between z-50 shrink-0 shadow-sm no-print">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20"><Layers size={18} /></div>
-          <div>
-            <h1 className="text-sm lg:text-lg font-bold tracking-tight">Chronos Flow Pro</h1>
-            <span className="text-[8px] lg:text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Industrial Planner</span>
+      {!isCenterFullScreen && (
+        <nav className="h-14 lg:h-16 bg-white dark:bg-dark-surface border-b dark:border-dark-border px-4 lg:px-6 flex items-center justify-between z-50 shrink-0 shadow-sm no-print">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20"><Layers size={18} /></div>
+            <div className="hidden sm:block">
+              <h1 className="text-sm lg:text-lg font-bold tracking-tight">Chronos Flow Pro</h1>
+              <span className="text-[8px] lg:text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Industrial Planner</span>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 lg:gap-4">
-           <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
-              <button onClick={() => setZoom(Math.max(0.4, zoom - 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"><ZoomOut size={14} /></button>
-              <span className="text-[10px] font-bold text-slate-400 min-w-[36px] text-center">{Math.round(zoom * 100)}%</span>
-              <button onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"><ZoomIn size={14} /></button>
-           </div>
+          <div className="flex items-center gap-2 lg:gap-4">
+             <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
+                <button onClick={() => setZoom(Math.max(0.4, zoom - 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"><ZoomOut size={14} /></button>
+                <span className="text-[10px] font-bold text-slate-400 min-w-[36px] text-center">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"><ZoomIn size={14} /></button>
+             </div>
 
-           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
-              <button onClick={() => setOrientation('portrait')} className={`p-1.5 rounded-lg transition-all ${orientation === 'portrait' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500'}`}><Smartphone size={14} /></button>
-              <button onClick={() => setOrientation('landscape')} className={`p-1.5 rounded-lg transition-all ${orientation === 'landscape' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500'}`}><Monitor size={14} /></button>
-           </div>
+             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
+                <button onClick={() => setOrientation('portrait')} className={`p-1.5 rounded-lg transition-all ${orientation === 'portrait' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500'}`}><Smartphone size={14} /></button>
+                <button onClick={() => setOrientation('landscape')} className={`p-1.5 rounded-lg transition-all ${orientation === 'landscape' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-500'}`}><Monitor size={14} /></button>
+             </div>
 
-           <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
-              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
-                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-              <button onClick={() => { if(confirm('Clear all workspace data?')) { localStorage.clear(); window.location.reload(); } }} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors rounded-xl"><RotateCcw size={18} /></button>
-           </div>
-        </div>
-      </nav>
+             <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
+                <button onClick={() => setIsDarkMode(!isDarkMode)} title="Toggle Dark Mode" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
+                  {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
+                <button onClick={() => { if(confirm('Clear all workspace data?')) { localStorage.clear(); window.location.reload(); } }} title="Reset Workspace" className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors rounded-xl"><RotateCcw size={18} /></button>
+             </div>
+          </div>
+        </nav>
+      )}
 
       <main className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - Dynamic Width based on Viewport */}
         <aside className={`
-          ${mobileTab === 'sidebar' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : 'hidden'}
-          lg:flex lg:relative h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0
-          ${isLeftPanelOpen ? 'w-[18rem]' : 'w-[3.5rem]'}
+          ${mobileTab === 'sidebar' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : ''}
+          ${!isCenterFullScreen ? 'lg:flex lg:relative' : 'hidden'}
+          h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0 overflow-hidden
+          ${isLeftPanelOpen ? 'w-[15vw] min-w-[14rem] max-w-[20rem]' : 'w-[3.5rem]'}
+          ${mobileTab !== 'sidebar' && window.innerWidth < 1024 ? 'hidden' : ''}
         `}>
           <Sidebar 
             profiles={profiles} categories={categories} resources={resources}
@@ -182,16 +213,25 @@ const App: React.FC = () => {
             onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule}), 'chronos_export.cfp', 'application/json')}
             onImportCFP={handleImportCFP}
             onExportCSV={() => downloadFile(generateCSV(blocks, categories, resources), 'schedule_summary.csv', 'text/csv')}
-            onExportPDF={() => window.print()}
+            onExportPDF={() => {
+              const prevFullScreen = isCenterFullScreen;
+              setIsCenterFullScreen(true);
+              // Wait for layout to settle
+              setTimeout(() => {
+                window.print();
+                if (!prevFullScreen) setIsCenterFullScreen(false);
+              }, 600);
+            }}
           />
         </aside>
 
-        <div className={`flex-1 flex flex-col min-w-0 h-full transition-all duration-300 ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
+        {/* Workspace - Guaranteed minimum space */}
+        <div className={`flex-1 flex flex-col min-w-[20rem] h-full transition-all duration-300 ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
            <div className="flex-1 overflow-hidden relative">
               {blocks.length === 0 ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center m-4 bg-white/40 dark:bg-dark-surface/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
                   <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-full flex items-center justify-center mb-6"><Plus size={32} /></div>
-                  <h3 className="text-xl font-bold mb-2">Workspace Empty</h3>
+                  <h3 className="text-xl font-bold mb-2 text-slate-800 dark:text-slate-100">Workspace Empty</h3>
                   <p className="text-slate-500 dark:text-slate-400 max-w-sm mb-8 text-sm">Deploy units from your library or import a configuration file to begin your shift planning.</p>
                   <div className="flex gap-3">
                     <button onClick={() => handleAddBlockFromProfile(profiles[0])} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:scale-105 transition-all">Add Default Unit</button>
@@ -206,16 +246,22 @@ const App: React.FC = () => {
                   onSelectBlock={(id) => { setSelectedBlockId(id); if (window.innerWidth < 1024 && id) setMobileTab('detail'); }} 
                   selectedBlockId={selectedBlockId} lunchRule={lunchRule} 
                   onSplitBlock={handleSplitBlock} 
+                  onMergeBlocks={handleMergeBlocks}
                   orientation={orientation} fontSize={12} zoom={zoom}
+                  isFullScreen={isCenterFullScreen}
+                  onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
                 />
               )}
            </div>
         </div>
 
+        {/* Right Detail Panel */}
         <aside className={`
-          ${mobileTab === 'detail' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : 'hidden'}
-          lg:flex lg:relative h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0
-          ${isRightPanelOpen ? 'w-[22rem]' : 'w-[3.5rem]'}
+          ${mobileTab === 'detail' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : ''}
+          ${!isCenterFullScreen ? 'lg:flex lg:relative' : 'hidden'}
+          h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0 overflow-hidden
+          ${isRightPanelOpen ? 'w-[18vw] min-w-[18rem] max-w-[24rem]' : 'w-[3.5rem]'}
+          ${mobileTab !== 'detail' && window.innerWidth < 1024 ? 'hidden' : ''}
         `}>
           <DetailPanel 
             block={selectedBlock} allBlocks={blocks} categories={categories} resources={resources}
@@ -227,30 +273,34 @@ const App: React.FC = () => {
         </aside>
       </main>
 
-      <div className="lg:hidden h-16 bg-white dark:bg-dark-surface border-t dark:border-dark-border flex items-center justify-around px-2 z-[70] no-print shrink-0">
-         <button onClick={() => setMobileTab('sidebar')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${mobileTab === 'sidebar' ? 'text-indigo-600' : 'text-slate-400'}`}>
-           <Library size={20} /><span className="text-[10px] font-bold uppercase tracking-tighter">Library</span>
-         </button>
-         <button onClick={() => setMobileTab('timeline')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${mobileTab === 'timeline' ? 'text-indigo-600' : 'text-slate-400'}`}>
-           <div className="relative"><LayoutGrid size={20} />{blocks.length > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-white dark:border-dark-surface"></span>}</div>
-           <span className="text-[10px] font-bold uppercase tracking-tighter">Timeline</span>
-         </button>
-         <button onClick={() => setMobileTab('detail')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${mobileTab === 'detail' ? 'text-indigo-600' : 'text-slate-400'}`}>
-           <Settings2 size={20} /><span className="text-[10px] font-bold uppercase tracking-tighter">Unit Config</span>
-         </button>
-      </div>
+      {!isCenterFullScreen && (
+        <div className="lg:hidden h-16 bg-white dark:bg-dark-surface border-t dark:border-dark-border flex items-center justify-around px-2 z-[70] no-print shrink-0">
+           <button onClick={() => setMobileTab('sidebar')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${mobileTab === 'sidebar' ? 'text-indigo-600' : 'text-slate-400'}`}>
+             <Library size={20} /><span className="text-[10px] font-bold uppercase tracking-tighter">Library</span>
+           </button>
+           <button onClick={() => setMobileTab('timeline')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${mobileTab === 'timeline' ? 'text-indigo-600' : 'text-slate-400'}`}>
+             <div className="relative"><LayoutGrid size={20} />{blocks.length > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-white dark:border-dark-surface"></span>}</div>
+             <span className="text-[10px] font-bold uppercase tracking-tighter">Timeline</span>
+           </button>
+           <button onClick={() => setMobileTab('detail')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${mobileTab === 'detail' ? 'text-indigo-600' : 'text-slate-400'}`}>
+             <Settings2 size={20} /><span className="text-[10px] font-bold uppercase tracking-tighter">Unit Config</span>
+           </button>
+        </div>
+      )}
 
-      <footer className="hidden lg:flex h-10 bg-white dark:bg-dark-surface border-t dark:border-dark-border px-6 items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] no-print shrink-0">
-        <div className="flex gap-6">
-          <span>{blocks.length} Units Online</span>
-          <span className="opacity-20">/</span>
-          <span>{resources.length} Equipment Assets Registered</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-          Industrial Engine Ready
-        </div>
-      </footer>
+      {!isCenterFullScreen && (
+        <footer className="hidden lg:flex h-10 bg-white dark:bg-dark-surface border-t dark:border-dark-border px-6 items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] no-print shrink-0">
+          <div className="flex gap-6">
+            <span>{blocks.length} Units Online</span>
+            <span className="opacity-20">/</span>
+            <span>{resources.length} Equipment Assets Registered</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+            Industrial Engine Ready
+          </div>
+        </footer>
+      )}
     </div>
   );
 };

@@ -3,7 +3,7 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Chronos Flow Pro | Industrial Planner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -25,23 +25,26 @@
         }
     </script>
     <style>
-        * { -webkit-tap-highlight-color: transparent; }
+        * { 
+            -webkit-tap-highlight-color: transparent; 
+            touch-action: manipulation;
+        }
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
             color: #0f172a;
             overflow: hidden;
             height: 100vh;
+            padding-bottom: env(safe-area-inset-bottom);
         }
         .dark body {
             background-color: #020617;
             color: #f8fafc;
         }
         
-        /* Production Grade Custom Scrollbars */
         .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
             background: rgba(0,0,0,0.05);
@@ -59,10 +62,6 @@
         .dark .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #334155;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-            background-clip: content-box;
-        }
 
         .timeline-grid {
             background-size: 120px 40px;
@@ -76,13 +75,36 @@
                 linear-gradient(to bottom, rgba(30, 41, 59, 0.5) 1px, transparent 1px);
         }
 
+        .no-scroll {
+            overflow: hidden !important;
+            touch-action: none;
+        }
+
         @media print {
-            nav, footer, .sidebar-container, .detail-panel-container, .no-print, button {
+            nav, footer, aside, .sidebar-container, .detail-panel-container, .no-print, button, header {
                 display: none !important;
             }
-            body { background: white !important; overflow: visible !important; }
-            #root { display: block !important; }
-            .timeline-container { width: 100% !important; border: none !important; }
+            body { 
+                background: white !important; 
+                overflow: visible !important; 
+                height: auto !important;
+            }
+            #root { 
+                display: block !important; 
+            }
+            main {
+                display: block !important;
+                height: auto !important;
+            }
+            .timeline-container { 
+                width: 100% !important; 
+                border: none !important; 
+                display: block !important;
+            }
+            /* Force timeline to show everything for printing */
+            .custom-scrollbar {
+                overflow: visible !important;
+            }
         }
     </style>
 <script type="importmap">
