@@ -28,31 +28,22 @@
             font-family: 'Inter', sans-serif;
             transition: background-color 0.3s ease;
         }
-        /* Enhanced Custom Scrollbars for Timeline */
         .custom-scrollbar::-webkit-scrollbar {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        .dark .custom-scrollbar::-webkit-scrollbar-track {
-            background: #0f172a;
+            background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #cbd5e1;
-            border-radius: 6px;
-            border: 3px solid #f1f5f9;
+            border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: content-box;
         }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #334155;
-            border-color: #0f172a;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-        /* Grid Background Pattern */
         .timeline-grid {
             background-size: 150px 30px;
             background-image: 
@@ -65,67 +56,36 @@
                 linear-gradient(to bottom, #1e293b 1px, transparent 1px);
         }
 
-        /* Print Styles for A4 Layout */
         @media print {
-            @page {
-                size: A4 landscape;
-                margin: 0;
-            }
+            @page { size: A4 landscape; margin: 0; }
             nav, footer, .sidebar-container, .detail-panel-container, .no-print, [role="button"], button {
                 display: none !important;
             }
-            body {
-                background: white !important;
-                color: black !important;
-                width: 100% !important;
-                height: auto !important;
-                overflow: visible !important;
+            body { background: white !important; color: black !important; width: 100% !important; overflow: visible !important; }
+            #root { display: block !important; }
+            main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+            .timeline-container { 
+                width: 100% !important; border: none !important; box-shadow: none !important; background: white !important;
             }
-            #root {
-                display: block !important;
-            }
-            main {
-                padding: 0 !important;
-                margin: 0 !important;
-                display: block !important;
-                overflow: visible !important;
-                width: 100% !important;
-            }
-            .timeline-container {
-                width: 100% !important;
-                height: auto !important;
-                min-height: 100vh !important;
-                overflow: visible !important;
-                position: static !important;
-                border: none !important;
-                box-shadow: none !important;
-                background: white !important;
-            }
-            .timeline-container .custom-scrollbar {
-                overflow: visible !important;
-                height: auto !important;
-                width: auto !important;
-            }
-            .timeline-grid {
-                background-image: 
-                    linear-gradient(to right, #eee 1px, transparent 1px),
-                    linear-gradient(to bottom, #eee 1px, transparent 1px) !important;
-            }
+            .timeline-container .custom-scrollbar { overflow: visible !important; }
         }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.564.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>
 </head>
 <body class="bg-slate-50 dark:bg-dark-bg transition-colors duration-300">
     <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>
