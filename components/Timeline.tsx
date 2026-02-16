@@ -139,8 +139,8 @@ const Timeline: React.FC<TimelineProps> = ({
         const depTimePos = (dep.startTime - START_HOUR * 60) * currentPPM;
         const depSize = dep.duration * currentPPM;
         const blockTimePos = (block.startTime - START_HOUR * 60) * currentPPM;
-        const depLanePos = 64 * zoom + (dep.lane * laneSize);
-        const blockLanePos = 64 * zoom + (block.lane * laneSize);
+        const depLanePos = (isLandscape ? (64 * zoom) : 64) + (dep.lane * laneSize);
+        const blockLanePos = (isLandscape ? (64 * zoom) : 64) + (block.lane * laneSize);
 
         let xStart, yStart, xEnd, yEnd;
         if (!isLandscape) {
@@ -182,6 +182,10 @@ const Timeline: React.FC<TimelineProps> = ({
     ? (getMaxLane(blocks) + 1) * laneSize + (100 * zoom)
     : (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom);
 
+  // Background grid calculations
+  const gridW = isLandscape ? (60 * currentPPM) : laneSize;
+  const gridH = isLandscape ? laneSize : (60 * currentPPM);
+
   return (
     <div className={`h-full flex flex-col bg-white dark:bg-dark-surface overflow-hidden timeline-container ${isFullScreen ? 'fixed inset-0 z-[100]' : ''}`}>
       <header className="p-3 lg:p-4 border-b dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/40 z-50 shrink-0 no-print">
@@ -195,7 +199,7 @@ const Timeline: React.FC<TimelineProps> = ({
         <div className="flex items-center gap-2 lg:gap-4">
            {resourceConflicts.size > 0 && (
              <div className="hidden sm:flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-red-100 dark:border-red-900/40">
-               <Boxes size={12} className="animate-bounce" /> ASSET CONFLICT
+               <Boxes size={12} className="animate-bounce" /> CONFLICT
              </div>
            )}
            <button 
@@ -212,7 +216,9 @@ const Timeline: React.FC<TimelineProps> = ({
         ref={scrollContainerRef} 
         className="flex-1 overflow-auto custom-scrollbar relative timeline-grid" 
         style={{ 
-          backgroundSize: `${isLandscape ? (60 * currentPPM) : (laneSize)}px ${isLandscape ? (laneSize) : (60 * currentPPM)}px`
+          backgroundSize: `${gridW}px ${gridH}px`,
+          // Ensure grid starts exactly at the header alignment
+          backgroundPosition: `${isLandscape ? 0 : 0}px ${isLandscape ? (64 * zoom) : 0}px` 
         }}
       >
         <div style={{ width: contentWidth, height: contentHeight, minWidth: '100%', minHeight: '100%' }} className="relative">
@@ -221,7 +227,7 @@ const Timeline: React.FC<TimelineProps> = ({
           <div className={`${isLandscape ? "flex" : "flex flex-col"} sticky top-0 left-0 z-40`}>
             {hours.map(hour => (
               <div key={hour} className="relative" style={{ [isLandscape ? 'width' : 'height']: 60 * currentPPM }}>
-                <div className={`${isLandscape ? "w-full text-center py-2" : "w-16 h-full flex items-center justify-end pr-3"} text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border`}>
+                <div className={`${isLandscape ? "w-full text-center py-2 h-[64px]" : "w-16 h-full flex items-center justify-end pr-3"} text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border`}>
                   {formatTime(hour * 60)}
                 </div>
               </div>
@@ -232,7 +238,7 @@ const Timeline: React.FC<TimelineProps> = ({
             {blocks.map(block => {
               const timePos = (block.startTime - START_HOUR * 60) * currentPPM;
               const timeSize = block.duration * currentPPM;
-              const lanePos = (64 * zoom) + (block.lane * laneSize);
+              const lanePos = (isLandscape ? (64 * zoom) : 64) + (block.lane * laneSize);
               const isSelected = selectedBlockId === block.id;
               const category = categories.find(c => c.id === block.categoryId);
               const colorClass = COLOR_MAP[category?.color || 'slate'];

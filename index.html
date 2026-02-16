@@ -63,21 +63,29 @@
             background: #334155;
         }
 
+        /* Dynamic grid will be handled by Timeline component */
         .timeline-grid {
-            background-size: 120px 40px;
             background-image: 
                 linear-gradient(to right, rgba(226, 232, 240, 0.4) 1px, transparent 1px),
                 linear-gradient(to bottom, rgba(226, 232, 240, 0.4) 1px, transparent 1px);
         }
         .dark .timeline-grid {
             background-image: 
-                linear-gradient(to right, rgba(30, 41, 59, 0.5) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(30, 41, 59, 0.5) 1px, transparent 1px);
+                linear-gradient(to right, rgba(30, 41, 59, 0.5) 1.5px, transparent 1.5px),
+                linear-gradient(to bottom, rgba(30, 41, 59, 0.5) 1.5px, transparent 1.5px);
         }
 
         .no-scroll {
             overflow: hidden !important;
             touch-action: none;
+        }
+
+        .resizer-h {
+            cursor: col-resize;
+            transition: background 0.2s;
+        }
+        .resizer-h:hover, .resizer-h.active {
+            background: #6366f1;
         }
 
         @media print {
@@ -101,7 +109,6 @@
                 border: none !important; 
                 display: block !important;
             }
-            /* Force timeline to show everything for printing */
             .custom-scrollbar {
                 overflow: visible !important;
             }

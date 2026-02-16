@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, Orientation } from './types';
 import Sidebar from './components/Sidebar';
 import Timeline from './components/Timeline';
@@ -36,6 +36,12 @@ const App: React.FC = () => {
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1200);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1400);
 
+  // Panel Widths
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => loadState('cfp_leftWidth', 260));
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => loadState('cfp_rightWidth', 320));
+
+  const resizingRef = useRef<'left' | 'right' | null>(null);
+
   useEffect(() => {
     localStorage.setItem('cfp_blocks', JSON.stringify(blocks));
     localStorage.setItem('cfp_profiles', JSON.stringify(profiles));
@@ -45,12 +51,54 @@ const App: React.FC = () => {
     localStorage.setItem('cfp_darkMode', JSON.stringify(isDarkMode));
     localStorage.setItem('cfp_orientation', JSON.stringify(orientation));
     localStorage.setItem('cfp_zoom', JSON.stringify(zoom));
-  }, [blocks, profiles, categories, resources, lunchRule, isDarkMode, orientation, zoom]);
+    localStorage.setItem('cfp_leftWidth', JSON.stringify(leftPanelWidth));
+    localStorage.setItem('cfp_rightWidth', JSON.stringify(rightPanelWidth));
+  }, [blocks, profiles, categories, resources, lunchRule, isDarkMode, orientation, zoom, leftPanelWidth, rightPanelWidth]);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
+
+  // Resizer Event Handlers
+  const handleResizerStart = useCallback((side: 'left' | 'right') => {
+    resizingRef.current = side;
+    document.body.style.cursor = 'col-resize';
+    document.body.classList.add('no-scroll');
+  }, []);
+
+  const handleResizerMove = useCallback((clientX: number) => {
+    if (!resizingRef.current) return;
+
+    if (resizingRef.current === 'left') {
+      const newWidth = Math.max(200, Math.min(clientX, 450));
+      setLeftPanelWidth(newWidth);
+    } else {
+      const newWidth = Math.max(240, Math.min(window.innerWidth - clientX, 500));
+      setRightPanelWidth(newWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => handleResizerMove(e.clientX);
+    const onTouchMove = (e: TouchEvent) => handleResizerMove(e.touches[0].clientX);
+    const onEnd = () => {
+      resizingRef.current = null;
+      document.body.style.cursor = '';
+      document.body.classList.remove('no-scroll');
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onTouchMove);
+    window.addEventListener('touchend', onEnd);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [handleResizerMove]);
 
   const handleAddBlockFromProfile = (profile: ProfileBlock) => {
     const newBlock: TimeBlock = {
@@ -196,14 +244,16 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Dynamic Width based on Viewport */}
-        <aside className={`
-          ${mobileTab === 'sidebar' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : ''}
-          ${!isCenterFullScreen ? 'lg:flex lg:relative' : 'hidden'}
-          h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0 overflow-hidden
-          ${isLeftPanelOpen ? 'w-[15vw] min-w-[14rem] max-w-[20rem]' : 'w-[3.5rem]'}
-          ${mobileTab !== 'sidebar' && window.innerWidth < 1024 ? 'hidden' : ''}
-        `}>
+        {/* Left Sidebar */}
+        <aside 
+          className={`
+            ${mobileTab === 'sidebar' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : ''}
+            ${!isCenterFullScreen ? 'lg:flex lg:relative' : 'hidden'}
+            h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0 overflow-hidden relative
+            ${mobileTab !== 'sidebar' && window.innerWidth < 1024 ? 'hidden' : ''}
+          `}
+          style={{ width: isLeftPanelOpen ? leftPanelWidth : 56 }}
+        >
           <Sidebar 
             profiles={profiles} categories={categories} resources={resources}
             onUpdateProfiles={setProfiles} onUpdateCategories={setCategories} onUpdateResources={setResources}
@@ -216,17 +266,23 @@ const App: React.FC = () => {
             onExportPDF={() => {
               const prevFullScreen = isCenterFullScreen;
               setIsCenterFullScreen(true);
-              // Wait for layout to settle
               setTimeout(() => {
                 window.print();
                 if (!prevFullScreen) setIsCenterFullScreen(false);
               }, 600);
             }}
           />
+          {isLeftPanelOpen && !isCenterFullScreen && window.innerWidth >= 1024 && (
+            <div 
+              onMouseDown={() => handleResizerStart('left')}
+              onTouchStart={() => handleResizerStart('left')}
+              className="absolute right-0 top-0 bottom-0 w-1.5 resizer-h z-[65]" 
+            />
+          )}
         </aside>
 
-        {/* Workspace - Guaranteed minimum space */}
-        <div className={`flex-1 flex flex-col min-w-[20rem] h-full transition-all duration-300 ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
+        {/* Workspace */}
+        <div className={`flex-1 flex flex-col min-w-[300px] h-full transition-all duration-300 ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
            <div className="flex-1 overflow-hidden relative">
               {blocks.length === 0 ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center m-4 bg-white/40 dark:bg-dark-surface/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
@@ -256,13 +312,22 @@ const App: React.FC = () => {
         </div>
 
         {/* Right Detail Panel */}
-        <aside className={`
-          ${mobileTab === 'detail' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : ''}
-          ${!isCenterFullScreen ? 'lg:flex lg:relative' : 'hidden'}
-          h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0 overflow-hidden
-          ${isRightPanelOpen ? 'w-[18vw] min-w-[18rem] max-w-[24rem]' : 'w-[3.5rem]'}
-          ${mobileTab !== 'detail' && window.innerWidth < 1024 ? 'hidden' : ''}
-        `}>
+        <aside 
+          className={`
+            ${mobileTab === 'detail' ? 'fixed inset-0 z-[60] p-4 bg-slate-50/95 dark:bg-dark-bg/95 backdrop-blur-sm' : ''}
+            ${!isCenterFullScreen ? 'lg:flex lg:relative' : 'hidden'}
+            h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border transition-[width] duration-300 ease-in-out shrink-0 overflow-hidden relative
+            ${mobileTab !== 'detail' && window.innerWidth < 1024 ? 'hidden' : ''}
+          `}
+          style={{ width: isRightPanelOpen ? rightPanelWidth : 56 }}
+        >
+          {isRightPanelOpen && !isCenterFullScreen && window.innerWidth >= 1024 && (
+            <div 
+              onMouseDown={() => handleResizerStart('right')}
+              onTouchStart={() => handleResizerStart('right')}
+              className="absolute left-0 top-0 bottom-0 w-1.5 resizer-h z-[65]" 
+            />
+          )}
           <DetailPanel 
             block={selectedBlock} allBlocks={blocks} categories={categories} resources={resources}
             onUpdate={handleUpdateBlock} 
