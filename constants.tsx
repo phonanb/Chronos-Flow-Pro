@@ -1,19 +1,21 @@
 
-import { Category, Resource } from './types';
+import { Category, Resource, ProfileBlock } from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
-  { id: 'cat-work', name: 'Work', color: 'blue' },
-  { id: 'cat-health', name: 'Health', color: 'emerald' },
-  { id: 'cat-personal', name: 'Personal', color: 'purple' },
-  { id: 'cat-learning', name: 'Learning', color: 'amber' },
-  { id: 'cat-chores', name: 'Chores', color: 'slate' },
+  { id: 'lot-1', name: 'Lot 1', color: 'blue' },
+  { id: 'lot-2', name: 'Lot 2', color: 'emerald' },
+  { id: 'lot-3', name: 'Lot 3', color: 'purple' },
 ];
 
 export const INITIAL_RESOURCES: Resource[] = [
-  { id: 'res-1', name: 'Laptop', description: 'Primary workstation' },
-  { id: 'res-2', name: 'Autoclave A', description: 'Sterilization unit A' },
-  { id: 'res-3', name: 'Autoclave B', description: 'Sterilization unit B' },
-  { id: 'res-4', name: 'Conference Room', description: 'Main meeting space' },
+  { id: 'res-mt-a', name: 'Mixing Tank A', description: 'Mixing Tank Unit A' },
+  { id: 'res-mt-b', name: 'Mixing Tank B', description: 'Mixing Tank Unit B' },
+  { id: 'res-filling', name: 'Filling', description: 'Filling Line' },
+  { id: 'res-auto-a', name: 'Autoclave A', description: 'Sterilization Unit A' },
+  { id: 'res-auto-b', name: 'Autoclave B', description: 'Sterilization Unit B' },
+  { id: 'res-leak', name: 'Leak tester', description: 'Leak Testing Equipment' },
+  { id: 'res-avi', name: 'AVI', description: 'Automatic Visual Inspection' },
+  { id: 'res-packing', name: 'Packing', description: 'Packaging Area' },
 ];
 
 export const START_HOUR = 6;
@@ -21,10 +23,14 @@ export const END_HOUR = 22;
 export const MINUTES_IN_HOUR = 60;
 export const PIXELS_PER_MINUTE = 2;
 
-export const INITIAL_PROFILES = [
-  { id: 'p1', name: 'Deep Work Session', categoryId: 'cat-work', defaultDuration: 120, color: 'blue', resourceIds: ['res-1'] },
-  { id: 'p2', name: 'Exercise', categoryId: 'cat-health', defaultDuration: 45, color: 'emerald', resourceIds: [] },
-  { id: 'p3', name: 'Sterilization', categoryId: 'cat-work', defaultDuration: 90, color: 'amber', resourceIds: ['res-2'] },
+export const INITIAL_PROFILES: ProfileBlock[] = [
+  { id: 'p-mt-a', name: 'Mixing Tank A', categoryId: 'lot-1', defaultDuration: 120, color: 'blue', resourceIds: ['res-mt-a'] },
+  { id: 'p-mt-b', name: 'Mixing Tank B', categoryId: 'lot-1', defaultDuration: 120, color: 'blue', resourceIds: ['res-mt-b'] },
+  { id: 'p-filling', name: 'Filling', categoryId: 'lot-1', defaultDuration: 90, color: 'emerald', resourceIds: ['res-filling'] },
+  { id: 'p-auto-a', name: 'Autoclave A', categoryId: 'lot-1', defaultDuration: 60, color: 'purple', resourceIds: ['res-auto-a'] },
+  { id: 'p-auto-b', name: 'Autoclave B', categoryId: 'lot-1', defaultDuration: 60, color: 'purple', resourceIds: ['res-auto-b'] },
+  { id: 'p-leak-avi', name: 'Leaktest&AVI', categoryId: 'lot-1', defaultDuration: 120, color: 'amber', resourceIds: ['res-leak', 'res-avi'] },
+  { id: 'p-packing', name: 'Packing', categoryId: 'lot-1', defaultDuration: 180, color: 'slate', resourceIds: ['res-packing'] },
 ];
 
 export const COLOR_MAP: Record<string, string> = {

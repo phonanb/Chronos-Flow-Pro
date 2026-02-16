@@ -1,9 +1,9 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { TimeBlock, LunchBreakRule, Category, Orientation } from '../types';
+import { TimeBlock, LunchBreakRule, Category } from '../types';
 import { START_HOUR, END_HOUR, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
-import { Scissors, Trash2, Boxes, Info, LayoutGrid, Merge, Maximize2, Minimize2 } from 'lucide-react';
+import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2 } from 'lucide-react';
 
 interface TimelineProps {
   blocks: TimeBlock[];
@@ -15,7 +15,6 @@ interface TimelineProps {
   lunchRule: LunchBreakRule;
   onSplitBlock: (blockId: string) => void;
   onMergeBlocks: (blockId: string) => void;
-  orientation: Orientation;
   fontSize: number;
   zoom: number;
   isFullScreen: boolean;
@@ -32,7 +31,6 @@ const Timeline: React.FC<TimelineProps> = ({
   lunchRule,
   onSplitBlock,
   onMergeBlocks,
-  orientation,
   fontSize,
   zoom,
   isFullScreen,
@@ -41,14 +39,12 @@ const Timeline: React.FC<TimelineProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [draggingBlock, setDraggingBlock] = useState<{ id: string, initialX: number, initialY: number, initialStart: number, initialLane: number } | null>(null);
 
-  const isLandscape = orientation === 'landscape';
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
   const resourceConflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);
   
   const currentPPM = PIXELS_PER_MINUTE * zoom;
   const laneSize = 160 * zoom; 
-  // Standardized header size to match Tailwind h-16 / w-16 (64px)
-  const HEADER_OFFSET = 64;
+  const HEADER_HEIGHT = 64; 
 
   const startDrag = (clientX: number, clientY: number, block: TimeBlock) => {
     if (block.isLocked) return;
@@ -62,17 +58,6 @@ const Timeline: React.FC<TimelineProps> = ({
     onSelectBlock(block.id);
   };
 
-  const handleMouseDown = (e: React.MouseEvent, block: TimeBlock) => {
-    e.stopPropagation();
-    startDrag(e.clientX, e.clientY, block);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent, block: TimeBlock) => {
-    e.stopPropagation();
-    const touch = e.touches[0];
-    startDrag(touch.clientX, touch.clientY, block);
-  };
-
   const moveDrag = useCallback((clientX: number, clientY: number) => {
     if (!draggingBlock || !scrollContainerRef.current) return;
     
@@ -83,53 +68,44 @@ const Timeline: React.FC<TimelineProps> = ({
     if (!block) return;
 
     // Time Axis Movement (Snap to 15 mins)
-    // In Landscape: X is time. In Portrait: Y is time.
-    const timeDelta = Math.round((isLandscape ? deltaX : deltaY) / currentPPM / 15) * 15;
+    const timeDelta = Math.round(deltaX / currentPPM / 15) * 15;
     const newStart = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - block.duration, draggingBlock.initialStart + timeDelta));
     
     // Lane Axis Movement
-    // In Landscape: Y is lane. In Portrait: X is lane.
-    const laneDelta = Math.round((isLandscape ? deltaY : deltaX) / laneSize);
+    const laneDelta = Math.round(deltaY / laneSize);
     const newLane = Math.max(0, draggingBlock.initialLane + laneDelta);
 
     if (newStart !== block.startTime || newLane !== block.lane) {
       onUpdateBlock({ ...block, startTime: newStart, lane: newLane });
     }
-  }, [draggingBlock, blocks, currentPPM, laneSize, isLandscape, onUpdateBlock]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    moveDrag(e.clientX, e.clientY);
-  }, [moveDrag]);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (draggingBlock) {
-      if (e.cancelable) e.preventDefault();
-      const touch = e.touches[0];
-      moveDrag(touch.clientX, touch.clientY);
-    }
-  }, [draggingBlock, moveDrag]);
-
-  const endDrag = useCallback(() => {
-    setDraggingBlock(null);
-  }, []);
+  }, [draggingBlock, blocks, currentPPM, laneSize, onUpdateBlock]);
 
   useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => moveDrag(e.clientX, e.clientY);
+    const handleMouseUp = () => setDraggingBlock(null);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (draggingBlock) {
+        if (e.cancelable) e.preventDefault();
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+    const handleTouchEnd = () => setDraggingBlock(null);
+
     if (draggingBlock) {
       window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', endDrag);
+      window.addEventListener('mouseup', handleMouseUp);
       window.addEventListener('touchmove', handleTouchMove, { passive: false });
-      window.addEventListener('touchend', endDrag);
+      window.addEventListener('touchend', handleTouchEnd);
       document.body.classList.add('no-scroll');
-    } else {
-      document.body.classList.remove('no-scroll');
     }
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', endDrag);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', endDrag);
+      window.removeEventListener('touchend', handleTouchEnd);
+      document.body.classList.remove('no-scroll');
     };
-  }, [draggingBlock, handleMouseMove, handleTouchMove, endDrag]);
+  }, [draggingBlock, moveDrag]);
 
   const renderArrows = () => (
     <svg className="absolute inset-0 pointer-events-none overflow-visible z-10 no-print">
@@ -145,26 +121,15 @@ const Timeline: React.FC<TimelineProps> = ({
         const depTimePos = (dep.startTime - START_HOUR * 60) * currentPPM;
         const depSize = dep.duration * currentPPM;
         const blockTimePos = (block.startTime - START_HOUR * 60) * currentPPM;
-        const depLanePos = HEADER_OFFSET + (dep.lane * laneSize);
-        const blockLanePos = HEADER_OFFSET + (block.lane * laneSize);
+        const depLanePos = HEADER_HEIGHT + (dep.lane * laneSize);
+        const blockLanePos = HEADER_HEIGHT + (block.lane * laneSize);
 
-        let xStart, yStart, xEnd, yEnd;
-        if (!isLandscape) {
-          xStart = depLanePos + (laneSize / 2);
-          yStart = depTimePos + depSize;
-          xEnd = blockLanePos + (laneSize / 2);
-          yEnd = blockTimePos;
-        } else {
-          xStart = depTimePos + depSize;
-          yStart = depLanePos + (laneSize / 2);
-          xEnd = blockTimePos;
-          yEnd = blockLanePos + (laneSize / 2);
-        }
+        const xStart = depTimePos + depSize;
+        const yStart = depLanePos + (laneSize / 2);
+        const xEnd = blockTimePos;
+        const yEnd = blockLanePos + (laneSize / 2);
 
-        const pathData = isLandscape 
-          ? `M ${xStart} ${yStart} C ${xStart + (40 * zoom)} ${yStart}, ${xEnd - (40 * zoom)} ${yEnd}, ${xEnd} ${yEnd}`
-          : `M ${xStart} ${yStart} C ${xStart} ${yStart + (40 * zoom)}, ${xEnd} ${yEnd - (40 * zoom)}, ${xEnd} ${yEnd}`;
-
+        const pathData = `M ${xStart} ${yStart} C ${xStart + (40 * zoom)} ${yStart}, ${xEnd - (40 * zoom)} ${yEnd}, ${xEnd} ${yEnd}`;
         const isViolation = dep.startTime + dep.duration > block.startTime;
 
         return (
@@ -180,16 +145,9 @@ const Timeline: React.FC<TimelineProps> = ({
     </svg>
   );
 
-  const contentWidth = isLandscape 
-    ? (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom)
-    : (getMaxLane(blocks) + 1) * laneSize + (100 * zoom);
-    
-  const contentHeight = isLandscape 
-    ? (getMaxLane(blocks) + 1) * laneSize + (100 * zoom)
-    : (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom);
-
-  const gridW = isLandscape ? (60 * currentPPM) : laneSize;
-  const gridH = isLandscape ? laneSize : (60 * currentPPM);
+  const contentWidth = (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom);
+  const contentHeight = (getMaxLane(blocks) + 1) * laneSize + (100 * zoom);
+  const gridHourWidth = 60 * currentPPM;
 
   return (
     <div className={`h-full flex flex-col bg-white dark:bg-dark-surface overflow-hidden timeline-container ${isFullScreen ? 'fixed inset-0 z-[100]' : ''}`}>
@@ -215,20 +173,27 @@ const Timeline: React.FC<TimelineProps> = ({
 
       <div 
         ref={scrollContainerRef} 
-        className="flex-1 overflow-auto custom-scrollbar relative timeline-grid" 
-        style={{ 
-          backgroundSize: `${gridW}px ${gridH}px`,
-          // Align background position exactly to header size
-          backgroundPosition: `${isLandscape ? 0 : HEADER_OFFSET}px ${isLandscape ? HEADER_OFFSET : 0}px` 
-        }}
+        className="flex-1 overflow-auto custom-scrollbar relative"
       >
-        <div style={{ width: contentWidth, height: contentHeight, minWidth: '100%', minHeight: '100%' }} className="relative">
+        <div 
+          style={{ 
+            width: contentWidth, 
+            height: contentHeight, 
+            minWidth: '100%', 
+            minHeight: '100%',
+            // The grid background ensures precise hour alignment
+            backgroundImage: `linear-gradient(to right, rgba(148, 163, 184, 0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px)`,
+            backgroundSize: `${gridHourWidth}px ${laneSize}px`,
+            backgroundPosition: `0px ${HEADER_HEIGHT}px`
+          }}
+          className="relative"
+        >
           {renderArrows()}
           
-          <div className={`${isLandscape ? "flex" : "flex flex-col"} sticky top-0 left-0 z-40`}>
+          <div className="flex sticky top-0 z-40">
             {hours.map(hour => (
-              <div key={hour} className="relative" style={{ [isLandscape ? 'width' : 'height']: 60 * currentPPM }}>
-                <div className={`${isLandscape ? "w-full text-center py-2 h-16" : "w-16 h-full flex items-center justify-end pr-3"} text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border`}>
+              <div key={hour} className="relative" style={{ width: gridHourWidth }}>
+                <div className="w-full text-center py-2 h-16 text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border flex items-center justify-center">
                   {formatTime(hour * 60)}
                 </div>
               </div>
@@ -239,29 +204,25 @@ const Timeline: React.FC<TimelineProps> = ({
             {blocks.map(block => {
               const timePos = (block.startTime - START_HOUR * 60) * currentPPM;
               const timeSize = block.duration * currentPPM;
-              const lanePos = HEADER_OFFSET + (block.lane * laneSize);
+              const lanePos = HEADER_HEIGHT + (block.lane * laneSize);
               const isSelected = selectedBlockId === block.id;
               const category = categories.find(c => c.id === block.categoryId);
               const colorClass = COLOR_MAP[category?.color || 'slate'];
               const hasResourceConflict = resourceConflicts.has(block.id);
               const isPart = block.title.includes(' (Part ');
 
-              const style = isLandscape 
-                ? { left: timePos, top: lanePos, width: timeSize, height: laneSize - (16 * zoom), minWidth: '12px' }
-                : { top: timePos, left: lanePos, height: timeSize, width: laneSize - (16 * zoom), minHeight: '12px' };
-
               return (
                 <div
                   key={block.id}
-                  onMouseDown={(e) => handleMouseDown(e, block)}
-                  onTouchStart={(e) => handleTouchStart(e, block)}
+                  onMouseDown={(e) => { e.stopPropagation(); startDrag(e.clientX, e.clientY, block); }}
+                  onTouchStart={(e) => { e.stopPropagation(); startDrag(e.touches[0].clientX, e.touches[0].clientY, block); }}
                   className={`absolute rounded-xl border-l-[6px] p-2 sm:p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden
                     ${colorClass} 
                     ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 z-50 scale-[1.01] shadow-xl' : 'z-30 hover:shadow-lg'}
                     ${hasResourceConflict ? 'border-red-500 ring-2 ring-red-500/20' : ''}
                     ${block.isLocked ? 'cursor-not-allowed opacity-90' : ''}
                   `}
-                  style={{...style, touchAction: 'none'}}
+                  style={{ left: timePos, top: lanePos, width: timeSize, height: laneSize - (16 * zoom), minWidth: '12px', touchAction: 'none' }}
                 >
                   <div className="flex flex-col justify-between h-full">
                     <div className="flex justify-between items-start">
@@ -286,10 +247,10 @@ const Timeline: React.FC<TimelineProps> = ({
           </div>
 
           {lunchRule.enabled && (
-            <div className={`absolute bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 pointer-events-none z-10 ${isLandscape ? "border-x h-full top-0" : "border-y w-full left-0"}`}
+            <div className="absolute bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 pointer-events-none z-10 border-x h-full top-0"
               style={{ 
-                [isLandscape ? 'left' : 'top']: (lunchRule.startTime - START_HOUR * 60) * currentPPM, 
-                [isLandscape ? 'width' : 'height']: (lunchRule.endTime - lunchRule.startTime) * currentPPM 
+                left: (lunchRule.startTime - START_HOUR * 60) * currentPPM, 
+                width: (lunchRule.endTime - lunchRule.startTime) * currentPPM 
               }}
             >
               <div className="absolute top-2 left-2 flex items-center gap-1.5 opacity-60">

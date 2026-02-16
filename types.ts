@@ -24,7 +24,7 @@ export interface TimeBlock {
   prerequisites: string[];
   color: string;
   isLocked: boolean;
-  lane: number; // Manual lane positioning (column in portrait, row in landscape)
+  lane: number; // Manual lane positioning (row in landscape)
 }
 
 export interface ProfileBlock {
@@ -41,5 +41,3 @@ export interface LunchBreakRule {
   startTime: number;
   endTime: number;
 }
-
-export type Orientation = 'portrait' | 'landscape';
