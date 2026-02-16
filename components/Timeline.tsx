@@ -1,9 +1,9 @@
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { TimeBlock, LunchBreakRule, Category, Orientation } from '../types';
 import { START_HOUR, END_HOUR, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
-import { Scissors, Trash2, Boxes, Info } from 'lucide-react';
+import { Scissors, Trash2, Boxes, Info, LayoutGrid } from 'lucide-react';
 
 interface TimelineProps {
   blocks: TimeBlock[];
@@ -32,16 +32,15 @@ const Timeline: React.FC<TimelineProps> = ({
   fontSize,
   zoom
 }) => {
-  const timelineRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [draggingBlock, setDraggingBlock] = useState<{ id: string, initialX: number, initialY: number, initialStart: number, initialLane: number } | null>(null);
 
   const isLandscape = orientation === 'landscape';
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
   const resourceConflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);
   
-  // Calculate scaled values based on zoom
   const currentPPM = PIXELS_PER_MINUTE * zoom;
-  const laneSize = 150 * zoom; 
+  const laneSize = 160 * zoom; 
 
   const handleMouseDown = (e: React.MouseEvent, block: TimeBlock) => {
     if (block.isLocked) return;
@@ -56,8 +55,8 @@ const Timeline: React.FC<TimelineProps> = ({
     onSelectBlock(block.id);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!draggingBlock || !timelineRef.current) return;
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!draggingBlock || !scrollContainerRef.current) return;
     
     const deltaX = e.clientX - draggingBlock.initialX;
     const deltaY = e.clientY - draggingBlock.initialY;
@@ -76,9 +75,9 @@ const Timeline: React.FC<TimelineProps> = ({
     if (newStart !== block.startTime || newLane !== block.lane) {
       onUpdateBlock({ ...block, startTime: newStart, lane: newLane });
     }
-  };
+  }, [draggingBlock, blocks, currentPPM, laneSize, isLandscape, onUpdateBlock]);
 
-  const handleMouseUp = () => setDraggingBlock(null);
+  const handleMouseUp = useCallback(() => setDraggingBlock(null), []);
 
   useEffect(() => {
     if (draggingBlock) {
@@ -89,102 +88,104 @@ const Timeline: React.FC<TimelineProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingBlock]);
+  }, [draggingBlock, handleMouseMove, handleMouseUp]);
 
-  const renderArrows = () => {
-    return (
-      <svg className="absolute inset-0 pointer-events-none overflow-visible z-10 no-print">
-        <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
-          </marker>
-        </defs>
-        {blocks.map(block => {
-          return block.dependencies.map(depId => {
-            const dep = blocks.find(b => b.id === depId);
-            if (!dep) return null;
+  const renderArrows = () => (
+    <svg className="absolute inset-0 pointer-events-none overflow-visible z-10 no-print">
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+        </marker>
+      </defs>
+      {blocks.map(block => block.dependencies.map(depId => {
+        const dep = blocks.find(b => b.id === depId);
+        if (!dep) return null;
 
-            let xStart, yStart, xEnd, yEnd;
-            const depTimePos = (dep.startTime - START_HOUR * 60) * currentPPM;
-            const depSize = dep.duration * currentPPM;
-            const blockTimePos = (block.startTime - START_HOUR * 60) * currentPPM;
-            const depLanePos = 64 * zoom + (dep.lane * laneSize);
-            const blockLanePos = 64 * zoom + (block.lane * laneSize);
+        const depTimePos = (dep.startTime - START_HOUR * 60) * currentPPM;
+        const depSize = dep.duration * currentPPM;
+        const blockTimePos = (block.startTime - START_HOUR * 60) * currentPPM;
+        const depLanePos = 64 * zoom + (dep.lane * laneSize);
+        const blockLanePos = 64 * zoom + (block.lane * laneSize);
 
-            if (!isLandscape) {
-              xStart = depLanePos + (laneSize / 2);
-              yStart = depTimePos + depSize;
-              xEnd = blockLanePos + (laneSize / 2);
-              yEnd = blockTimePos;
-            } else {
-              xStart = depTimePos + depSize;
-              yStart = depLanePos + (laneSize / 2);
-              xEnd = blockTimePos;
-              yEnd = blockLanePos + (laneSize / 2);
-            }
+        let xStart, yStart, xEnd, yEnd;
+        if (!isLandscape) {
+          xStart = depLanePos + (laneSize / 2);
+          yStart = depTimePos + depSize;
+          xEnd = blockLanePos + (laneSize / 2);
+          yEnd = blockTimePos;
+        } else {
+          xStart = depTimePos + depSize;
+          yStart = depLanePos + (laneSize / 2);
+          xEnd = blockTimePos;
+          yEnd = blockLanePos + (laneSize / 2);
+        }
 
-            const pathData = isLandscape 
-              ? `M ${xStart} ${yStart} C ${xStart + (40 * zoom)} ${yStart}, ${xEnd - (40 * zoom)} ${yEnd}, ${xEnd} ${yEnd}`
-              : `M ${xStart} ${yStart} C ${xStart} ${yStart + (40 * zoom)}, ${xEnd} ${yEnd - (40 * zoom)}, ${xEnd} ${yEnd}`;
+        const pathData = isLandscape 
+          ? `M ${xStart} ${yStart} C ${xStart + (40 * zoom)} ${yStart}, ${xEnd - (40 * zoom)} ${yEnd}, ${xEnd} ${yEnd}`
+          : `M ${xStart} ${yStart} C ${xStart} ${yStart + (40 * zoom)}, ${xEnd} ${yEnd - (40 * zoom)}, ${xEnd} ${yEnd}`;
 
-            return (
-              <path key={`${depId}-${block.id}`} d={pathData} fill="none" stroke="#94a3b8" strokeWidth={1.5 * zoom} markerEnd="url(#arrowhead)" 
-                strokeDasharray={dep.startTime + dep.duration > block.startTime ? "4" : "0"}
-                className={dep.startTime + dep.duration > block.startTime ? "stroke-red-400" : "opacity-40 dark:opacity-60"}
-              />
-            );
-          });
-        })}
-      </svg>
-    );
-  };
+        const isViolation = dep.startTime + dep.duration > block.startTime;
+
+        return (
+          <path key={`${depId}-${block.id}`} d={pathData} fill="none" 
+            stroke={isViolation ? "#f87171" : "#94a3b8"} 
+            strokeWidth={1.5 * zoom} 
+            markerEnd="url(#arrowhead)" 
+            strokeDasharray={isViolation ? "4" : "0"}
+            className={isViolation ? "animate-pulse" : "opacity-40"}
+          />
+        );
+      }))}
+    </svg>
+  );
 
   const contentWidth = isLandscape 
-    ? (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (200 * zoom)
-    : (getMaxLane(blocks) + 2) * laneSize;
+    ? (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom)
+    : (getMaxLane(blocks) + 1) * laneSize + (100 * zoom);
     
   const contentHeight = isLandscape 
-    ? (getMaxLane(blocks) + 2) * laneSize
-    : (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (200 * zoom);
+    ? (getMaxLane(blocks) + 1) * laneSize + (100 * zoom)
+    : (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom);
 
   return (
-    <div className={`timeline-container relative flex-1 bg-white dark:bg-dark-surface border dark:border-dark-border rounded-xl shadow-sm overflow-hidden flex flex-col h-full ${!isLandscape ? 'min-w-[400px]' : ''}`}>
-      <div className="p-4 border-b dark:border-dark-border flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/20 z-50 no-print">
-        <div className="flex items-center gap-2">
-           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Daily Units</h2>
-           <div className="text-[10px] text-slate-400 font-mono">SCROLL TO NAVIGATE • {Math.round(zoom * 100)}% ZOOM</div>
+    <div className="h-full flex flex-col bg-white dark:bg-dark-surface overflow-hidden">
+      <header className="p-3 lg:p-4 border-b dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/40 z-50 shrink-0 no-print">
+        <div className="flex items-center gap-3">
+           <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg"><LayoutGrid size={16} /></div>
+           <div>
+              <h2 className="text-[10px] lg:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-[0.2em]">Operational Timeline</h2>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{formatTime(START_HOUR * 60)} — {formatTime(END_HOUR * 60)}</p>
+           </div>
         </div>
-        <div className="flex gap-4">
+        <div className="flex items-center gap-4">
            {resourceConflicts.size > 0 && (
-             <div className="flex items-center gap-1.5 text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded text-[10px] font-bold animate-pulse">
-               <Boxes size={12} /> Conflict
+             <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-red-100 dark:border-red-900/40">
+               <Boxes size={12} className="animate-bounce" /> ASSET CONFLICT DETECTED
              </div>
            )}
         </div>
-      </div>
+      </header>
 
       <div 
-        ref={timelineRef} 
-        className="flex-1 overflow-auto custom-scrollbar relative p-4 timeline-grid" 
+        ref={scrollContainerRef} 
+        className="flex-1 overflow-auto custom-scrollbar relative timeline-grid" 
         style={{ 
           backgroundSize: `${isLandscape ? (60 * currentPPM) : (laneSize)}px ${isLandscape ? (laneSize) : (60 * currentPPM)}px`
         }}
       >
-        <div style={{ width: contentWidth, height: contentHeight }} className="relative">
+        <div style={{ width: contentWidth, height: contentHeight, minWidth: '100%', minHeight: '100%' }} className="relative">
           {renderArrows()}
           
-          {/* Hour markers */}
-          <div className={isLandscape ? "flex" : "flex flex-col"}>
+          <div className={`${isLandscape ? "flex" : "flex flex-col"} sticky top-0 left-0 z-40`}>
             {hours.map(hour => (
-              <div key={hour} className={`relative group ${isLandscape ? "" : ""}`} style={{ [isLandscape ? 'width' : 'height']: 60 * currentPPM }}>
-                <div className={`${isLandscape ? "absolute top-0 left-0 w-full text-center py-1" : "w-14 text-right pr-2 sticky left-0"} text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-sm z-40 uppercase`}>
+              <div key={hour} className="relative" style={{ [isLandscape ? 'width' : 'height']: 60 * currentPPM }}>
+                <div className={`${isLandscape ? "w-full text-center py-2" : "w-16 h-full flex items-center justify-end pr-3"} text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border`}>
                   {formatTime(hour * 60)}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Blocks container */}
           <div className="absolute top-0 left-0 bottom-0 right-0 z-20 pointer-events-none">
             {blocks.map(block => {
               const timePos = (block.startTime - START_HOUR * 60) * currentPPM;
@@ -196,35 +197,40 @@ const Timeline: React.FC<TimelineProps> = ({
               const hasResourceConflict = resourceConflicts.has(block.id);
 
               const style = isLandscape 
-                ? { left: timePos, top: lanePos, width: timeSize, height: laneSize - (10 * zoom), minWidth: '10px' }
-                : { top: timePos, left: lanePos, height: timeSize, width: laneSize - (10 * zoom), minHeight: '10px' };
+                ? { left: timePos, top: lanePos, width: timeSize, height: laneSize - (16 * zoom), minWidth: '12px' }
+                : { top: timePos, left: lanePos, height: timeSize, width: laneSize - (16 * zoom), minHeight: '12px' };
 
               return (
                 <div
                   key={block.id}
                   onMouseDown={(e) => handleMouseDown(e, block)}
-                  title={block.originalTitle ? `Original: ${block.originalTitle}` : undefined}
-                  className={`absolute rounded-lg border-l-4 p-2 shadow-sm transition-shadow cursor-move select-none group pointer-events-auto overflow-hidden
+                  className={`absolute rounded-xl border-l-[6px] p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden
                     ${colorClass} 
-                    ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 dark:ring-offset-dark-surface z-50' : 'z-30 hover:shadow-md'}
-                    ${hasResourceConflict ? 'border-red-600 dark:border-red-400 ring-1 ring-red-400' : ''}
+                    ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-dark-surface z-50 scale-[1.01] shadow-xl' : 'z-30 hover:shadow-lg hover:translate-y-[-1px]'}
+                    ${hasResourceConflict ? 'border-red-500 ring-2 ring-red-500/20' : ''}
+                    ${block.isLocked ? 'cursor-not-allowed opacity-90 grayscale-[0.2]' : ''}
                   `}
                   style={style}
                 >
-                  <div className="flex justify-between items-start h-full flex-col">
-                    <div className="w-full flex justify-between items-start">
-                      <h3 className="font-bold truncate leading-tight flex items-center gap-1" style={{ fontSize: `${fontSize * zoom}px` }}>
-                        {block.title}
-                        {block.originalTitle && <Info size={10 * zoom} className="opacity-50 no-print shrink-0" />}
-                      </h3>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity no-print shrink-0">
-                        <button onClick={(e) => { e.stopPropagation(); onSplitBlock(block.id); }} className="p-0.5 hover:bg-white/50 rounded text-amber-600"><Scissors size={10 * zoom} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDeleteBlock(block.id); }} className="p-0.5 hover:bg-white/50 rounded text-red-600"><Trash2 size={10 * zoom} /></button>
+                  <div className="flex flex-col justify-between h-full">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold truncate leading-tight flex items-center gap-1.5" style={{ fontSize: `${fontSize * zoom}px` }}>
+                          {block.title}
+                          {block.isLocked && <Info size={10 * zoom} className="text-slate-500" />}
+                        </h3>
+                        <p className="text-[9px] font-bold opacity-40 uppercase tracking-tighter truncate">{category?.name}</p>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity no-print">
+                        {!block.isLocked && <button onClick={(e) => { e.stopPropagation(); onSplitBlock(block.id); }} className="p-1 hover:bg-white/50 rounded transition-colors"><Scissors size={12 * zoom} /></button>}
+                        <button onClick={(e) => { e.stopPropagation(); onDeleteBlock(block.id); }} className="p-1 hover:bg-white/50 rounded transition-colors"><Trash2 size={12 * zoom} /></button>
                       </div>
                     </div>
-                    <div className="w-full flex justify-between items-end mt-1">
-                       <p className="opacity-70 font-bold whitespace-nowrap" style={{ fontSize: `${fontSize * 0.75 * zoom}px` }}>{formatTime(block.startTime)} ({block.duration}m)</p>
-                       {hasResourceConflict && <Boxes size={12 * zoom} className="text-red-600 dark:text-red-400 shrink-0" />}
+                    <div className="flex justify-between items-end">
+                       <p className="font-mono font-bold opacity-60 tracking-tight" style={{ fontSize: `${fontSize * 0.7 * zoom}px` }}>
+                          {formatTime(block.startTime)} • {block.duration}m
+                       </p>
+                       {hasResourceConflict && <Boxes size={14 * zoom} className="text-red-600 dark:text-red-400 animate-pulse" />}
                     </div>
                   </div>
                 </div>
@@ -232,15 +238,17 @@ const Timeline: React.FC<TimelineProps> = ({
             })}
           </div>
 
-          {/* Lunch Break Indicator */}
           {lunchRule.enabled && (
-            <div className={`absolute bg-yellow-50/20 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/50 pointer-events-none z-10 ${isLandscape ? "border-x h-full top-0" : "border-y w-full left-0"}`}
+            <div className={`absolute bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 pointer-events-none z-10 ${isLandscape ? "border-x h-full top-0" : "border-y w-full left-0"}`}
               style={{ 
                 [isLandscape ? 'left' : 'top']: (lunchRule.startTime - START_HOUR * 60) * currentPPM, 
                 [isLandscape ? 'width' : 'height']: (lunchRule.endTime - lunchRule.startTime) * currentPPM 
               }}
             >
-              <div className="text-[8px] text-yellow-600 dark:text-yellow-400/50 font-bold px-2 py-1 opacity-40 uppercase tracking-widest">Lunch Break</div>
+              <div className="absolute top-2 left-2 flex items-center gap-1.5 opacity-60">
+                <div className="p-1 bg-amber-500 text-white rounded"><LayoutGrid size={8} /></div>
+                <span className="text-[8px] font-black uppercase tracking-[0.3em] text-amber-600">Break Window</span>
+              </div>
             </div>
           )}
         </div>
