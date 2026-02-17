@@ -47,3 +47,15 @@ export interface EveningBreakRule {
   startTime: number;
   endTime: number;
 }
+
+export interface Snapshot {
+  id: string;
+  timestamp: number;
+  name: string;
+  blocks: TimeBlock[];
+  profiles: ProfileBlock[];
+  categories: Category[];
+  resources: Resource[];
+  lunchRule: LunchBreakRule;
+  eveningRule: EveningBreakRule;
+}
