@@ -154,7 +154,7 @@ const App: React.FC = () => {
     takeSnapshot(`Pre-AI Backup`);
     setIsAiGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const prompt = `Generate an optimized industrial production schedule for 7 days.
       Return as a JSON array of TimeBlock objects.`;
 
@@ -182,14 +182,19 @@ const App: React.FC = () => {
         }
       });
 
-      const result = JSON.parse(response.text.trim() || '[]');
+      const responseText = response.text;
+      if (!responseText) {
+        throw new Error("No response text from AI model");
+      }
+
+      const result = JSON.parse(responseText.trim() || '[]');
       if (Array.isArray(result) && result.length > 0) {
         recordChange(result);
         setTimeout(() => timelineRef.current?.scrollToFirstBlock(), 500);
       }
     } catch (error) {
       console.error(error);
-      alert("AI Generation failed.");
+      alert("AI Generation failed. Please check your API key and connection.");
     } finally {
       setIsAiGenerating(false);
     }

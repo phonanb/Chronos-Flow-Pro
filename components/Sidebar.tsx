@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot } from '../types';
 import { COLOR_MAP } from '../constants';
 import { Plus, Coffee, Clock, Settings, Edit3, Trash2, ChevronLeft, ChevronRight, Tags, Boxes, Download, FileText, Sparkles, Loader2, History, RotateCcw } from 'lucide-react';
@@ -227,7 +227,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex-1"><InputLabel>Category</InputLabel><select className={inputClasses} value={editingProfile.categoryId} onChange={e => setEditingProfile({...editingProfile, categoryId: e.target.value})}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                 <div className="w-24"><InputLabel>Min</InputLabel><input type="number" className={inputClasses} value={editingProfile.defaultDuration} onChange={e => setEditingProfile({...editingProfile, defaultDuration: parseInt(e.target.value)})}/></div>
              </div>
-             <button onClick={() => { onUpdateProfiles(profiles.find(p => p.id === editingProfile.id) ? profiles.map(p => p.id === editingProfile.id ? editingProfile : p) : [...profiles, editingProfile]); setEditingProfile(null); }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Save Template</button>
+             <button onClick={() => { 
+               if (!editingProfile) return;
+               onUpdateProfiles(profiles.find(p => p.id === editingProfile.id) ? profiles.map(p => p.id === editingProfile.id ? editingProfile : p) : [...profiles, editingProfile]); 
+               setEditingProfile(null); 
+             }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Save Template</button>
           </div>
         </div>
       )}
@@ -249,7 +253,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                  ))}
                </div>
              </div>
-             <button onClick={() => { onUpdateCategories(categories.find(c => c.id === editingCategory.id) ? categories.map(c => c.id === editingCategory.id ? editingCategory : c) : [...categories, editingCategory]); setEditingCategory(null); }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Update Category</button>
+             <button onClick={() => { 
+               if (!editingCategory) return;
+               onUpdateCategories(categories.find(c => c.id === editingCategory.id) ? categories.map(c => c.id === editingCategory.id ? editingCategory : c) : [...categories, editingCategory]); 
+               setEditingCategory(null); 
+             }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Update Category</button>
           </div>
         </div>
       )}
@@ -260,7 +268,11 @@ const Sidebar: React.FC<SidebarProps> = ({
              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Edit Resource</h3>
              <div><InputLabel>Name</InputLabel><input className={inputClasses} value={editingResource.name} onChange={e => setEditingResource({...editingResource, name: e.target.value})} /></div>
              <div><InputLabel>Description</InputLabel><textarea className={`${inputClasses} h-24 resize-none`} value={editingResource.description} onChange={e => setEditingResource({...editingResource, description: e.target.value})} /></div>
-             <button onClick={() => { onUpdateResources(resources.find(r => r.id === editingResource.id) ? resources.map(r => r.id === editingResource.id ? editingResource : r) : [...resources, editingResource]); setEditingResource(null); }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Save Resource</button>
+             <button onClick={() => { 
+               if (!editingResource) return;
+               onUpdateResources(resources.find(r => r.id === editingResource.id) ? resources.map(r => r.id === editingResource.id ? editingResource : r) : [...resources, editingResource]); 
+               setEditingResource(null); 
+             }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Save Resource</button>
           </div>
         </div>
       )}
