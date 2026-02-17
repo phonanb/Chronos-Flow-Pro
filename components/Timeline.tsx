@@ -1,9 +1,13 @@
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { TimeBlock, LunchBreakRule, EveningBreakRule, Category, ProfileBlock } from '../types';
 import { START_HOUR, END_HOUR, DAYS_IN_WEEK, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
 import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon } from 'lucide-react';
+
+export interface TimelineRef {
+  scrollToFirstBlock: () => void;
+}
 
 interface TimelineProps {
   blocks: TimeBlock[];
@@ -24,7 +28,7 @@ interface TimelineProps {
   onAddBlockAtPosition: (profile: ProfileBlock, startTime: number, lane: number) => void;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ 
+const Timeline = forwardRef<TimelineRef, TimelineProps>(({ 
   blocks, 
   categories,
   profiles,
@@ -41,20 +45,43 @@ const Timeline: React.FC<TimelineProps> = ({
   isFullScreen,
   onToggleFullScreen,
   onAddBlockAtPosition
-}) => {
+}, ref) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [draggingBlock, setDraggingBlock] = useState<{ id: string, initialX: number, initialY: number, initialStart: number, initialLane: number } | null>(null);
 
-  // 7 Days of Hours
+  const currentPPM = PIXELS_PER_MINUTE * zoom;
+  const laneSize = 160 * zoom; 
+  const HEADER_HEIGHT = 80;
+
+  const scrollToFirstBlock = useCallback(() => {
+    if (blocks.length === 0 || !scrollContainerRef.current) return;
+    const minStart = Math.min(...blocks.map(b => b.startTime));
+    // Scroll slightly before the block for context (100px)
+    const scrollPos = (minStart * currentPPM) - (100 * zoom);
+    scrollContainerRef.current.scrollTo({ 
+      left: Math.max(0, scrollPos), 
+      behavior: 'smooth' 
+    });
+  }, [blocks, currentPPM, zoom]);
+
+  useImperativeHandle(ref, () => ({
+    scrollToFirstBlock
+  }));
+
+  // Auto-scroll to first block on mount
+  useEffect(() => {
+    if (blocks.length > 0) {
+      // Small timeout to ensure layout is ready
+      const timer = setTimeout(scrollToFirstBlock, 100);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const days = Array.from({ length: DAYS_IN_WEEK }, (_, i) => i);
   const hoursPerDay = Array.from({ length: 24 }, (_, i) => i);
   
   const resourceConflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);
-  
-  const currentPPM = PIXELS_PER_MINUTE * zoom;
-  const laneSize = 160 * zoom; 
-  const HEADER_HEIGHT = 80; // Day + Hour header height
 
   const startDrag = (clientX: number, clientY: number, block: TimeBlock) => {
     if (block.isLocked) return;
@@ -77,13 +104,10 @@ const Timeline: React.FC<TimelineProps> = ({
     const block = blocks.find(b => b.id === draggingBlock.id);
     if (!block) return;
 
-    // Time Axis Movement (Snap to 15 mins)
     const timeDelta = Math.round(deltaX / currentPPM / 15) * 15;
-    // Limit to 7 days
     const maxMinutes = DAYS_IN_WEEK * 24 * 60;
     const newStart = Math.max(0, Math.min(maxMinutes - block.duration, draggingBlock.initialStart + timeDelta));
     
-    // Lane Axis Movement
     const laneDelta = Math.round(deltaY / laneSize);
     const newLane = Math.max(0, draggingBlock.initialLane + laneDelta);
 
@@ -131,14 +155,9 @@ const Timeline: React.FC<TimelineProps> = ({
     
     const profile = JSON.parse(data) as ProfileBlock;
     const rect = contentRef.current.getBoundingClientRect();
-    const scrollLeft = scrollContainerRef.current?.scrollLeft || 0;
-    const scrollTop = scrollContainerRef.current?.scrollTop || 0;
-    
-    // Position relative to contentRef's coordinate space
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Convert pixels to minutes and lanes
     const droppedTimeMinutes = Math.max(0, Math.floor(x / currentPPM / 15) * 15);
     const droppedLane = Math.max(0, Math.floor((y - HEADER_HEIGHT) / laneSize));
     
@@ -327,6 +346,6 @@ const Timeline: React.FC<TimelineProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default Timeline;

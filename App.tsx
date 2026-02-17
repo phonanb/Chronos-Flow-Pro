@@ -2,10 +2,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule } from './types';
 import Sidebar from './components/Sidebar';
-import Timeline from './components/Timeline';
+import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
 import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check } from 'lucide-react';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
@@ -32,6 +32,7 @@ const App: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<MobileTab>('timeline');
   const [isCenterFullScreen, setIsCenterFullScreen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
+  const [isDonateOpen, setIsDonateOpen] = useState(false);
   
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
@@ -39,6 +40,7 @@ const App: React.FC = () => {
   const [leftWidth, setLeftWidth] = useState(() => loadState('cfp_leftWidth', 260));
   const [rightWidth, setRightWidth] = useState(() => loadState('cfp_rightWidth', 320));
 
+  const timelineRef = useRef<TimelineRef>(null);
   const resizingRef = useRef<'left' | 'right' | null>(null);
 
   // Handle Shared URL Data
@@ -56,7 +58,6 @@ const App: React.FC = () => {
         if (decodedData.lunchRule) setLunchRule(decodedData.lunchRule);
         if (decodedData.eveningRule) setEveningRule(decodedData.eveningRule);
         
-        // Clear hash after loading to prevent accidental re-loads
         window.history.replaceState(null, '', window.location.pathname);
         alert("Configuration loaded from shared link!");
       } catch (e) {
@@ -111,14 +112,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleShare = () => {
-    const stateToShare = {
-      blocks,
-      profiles,
-      categories,
-      resources,
-      lunchRule,
-      eveningRule
-    };
+    const stateToShare = { blocks, profiles, categories, resources, lunchRule, eveningRule };
     const jsonStr = JSON.stringify(stateToShare);
     const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
     const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
@@ -127,9 +121,21 @@ const App: React.FC = () => {
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
     }).catch(err => {
-      alert("Failed to copy link. Check console.");
+      alert("Failed to copy link.");
       console.error(err);
     });
+  };
+
+  const handleExportPDF = () => {
+    // 1. Scroll to the earliest block so it's visible in the print viewport
+    timelineRef.current?.scrollToFirstBlock();
+    // 2. Trigger Fullscreen for clean export
+    setIsCenterFullScreen(true);
+    // 3. Small delay to ensure browser rendering is complete
+    setTimeout(() => {
+      window.print();
+      setIsCenterFullScreen(false);
+    }, 800);
   };
 
   const handleAddBlockAtPosition = (profile: ProfileBlock, startTime: number, lane: number) => {
@@ -155,7 +161,7 @@ const App: React.FC = () => {
   };
 
   const handleAddBlockFromProfile = (profile: ProfileBlock) => {
-    handleAddBlockAtPosition(profile, 480, 0); // Default to 8:00 AM, Lane 0
+    handleAddBlockAtPosition(profile, 480, 0); 
   };
 
   const handleUpdateBlock = (updatedBlock: TimeBlock) => {
@@ -238,11 +244,18 @@ const App: React.FC = () => {
              </div>
              <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
                 <button 
+                  onClick={() => setIsDonateOpen(true)}
+                  className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 hover:bg-pink-100 transition-all border border-pink-100 dark:border-pink-900/50 shadow-sm shadow-pink-500/10"
+                >
+                  <Heart size={16} fill="currentColor" />
+                  Donate
+                </button>
+                <button 
                   onClick={handleShare} 
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'}`}
                 >
                   {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
-                  <span className="hidden sm:inline">{shareFeedback ? 'Link Copied' : 'Share Workspace'}</span>
+                  <span className="hidden sm:inline">{shareFeedback ? 'Link Copied' : 'Share'}</span>
                 </button>
                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
                   {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
@@ -269,7 +282,7 @@ const App: React.FC = () => {
             onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule, eveningRule}), 'chronos_export.cfp', 'application/json')}
             onImportCFP={handleImportCFP}
             onExportCSV={() => downloadFile(generateCSV(blocks, categories, resources), 'schedule.csv', 'text/csv')}
-            onExportPDF={() => { setIsCenterFullScreen(true); setTimeout(() => { window.print(); setIsCenterFullScreen(false); }, 500); }}
+            onExportPDF={handleExportPDF}
           />
           {!isMobile && isLeftPanelOpen && !isCenterFullScreen && (
             <div onMouseDown={() => handleResizerStart('left')} className="absolute right-0 top-0 bottom-0 w-1 px-1 cursor-col-resize z-[60] hover:bg-indigo-500/20" />
@@ -287,6 +300,7 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <Timeline 
+                  ref={timelineRef}
                   blocks={blocks} categories={categories} profiles={profiles}
                   onUpdateBlock={handleUpdateBlock} onDeleteBlock={(id) => setBlocks(prev => prev.filter(b => b.id !== id))} 
                   onSelectBlock={(id) => { setSelectedBlockId(id); if (isMobile && id) setMobileTab('detail'); }} 
@@ -315,6 +329,31 @@ const App: React.FC = () => {
           />
         </aside>
       </main>
+
+      {isDonateOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-200" onClick={() => setIsDonateOpen(false)}>
+           <div className="bg-white dark:bg-dark-surface p-4 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full relative flex flex-col items-center border dark:border-dark-border" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setIsDonateOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><X size={20} /></button>
+              <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900/30 text-pink-600 rounded-full flex items-center justify-center mb-4"><Heart size={24} fill="currentColor" /></div>
+              <h3 className="text-xl font-bold text-center mb-1">Support Chronos Flow</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">If you find this tool helpful, consider supporting its development!</p>
+              
+              <div className="bg-white p-4 rounded-2xl shadow-inner border dark:border-slate-800">
+                 <img 
+                    src="https://images.squarespace-cdn.com/content/v1/5948303f2994cac095a09d3b/1587375269550-B00B0T7P7K0M8X5J4K0B/PromptPay-QR-Code.png" 
+                    alt="Thai QR Payment" 
+                    className="w-64 h-auto rounded-lg mx-auto filter dark:invert-0"
+                    onError={(e) => { e.currentTarget.src = "https://th.bing.com/th/id/OIP.rE7Wn9f8S9z5t6_4_m6n8AHaHa?rs=1&pid=ImgDetMain"; }} 
+                 />
+                 <div className="mt-4 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Thai QR Payment | PromptPay</p>
+                 </div>
+              </div>
+              
+              <p className="mt-6 text-[11px] text-slate-400 dark:text-slate-500 font-medium max-w-[240px] text-center">Scan with any Thai mobile banking app to donate. Thank you for your support!</p>
+           </div>
+        </div>
+      )}
 
       {!isCenterFullScreen && (
         <div className="lg:hidden h-16 bg-white dark:bg-dark-surface border-t dark:border-dark-border flex items-center justify-around px-2 z-[70] no-print shrink-0">
