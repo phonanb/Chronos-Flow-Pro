@@ -1,9 +1,9 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { TimeBlock, LunchBreakRule, Category } from '../types';
-import { START_HOUR, END_HOUR, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
+import { TimeBlock, LunchBreakRule, EveningBreakRule, Category } from '../types';
+import { START_HOUR, END_HOUR, DAYS_IN_WEEK, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
-import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2 } from 'lucide-react';
+import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon } from 'lucide-react';
 
 interface TimelineProps {
   blocks: TimeBlock[];
@@ -13,6 +13,7 @@ interface TimelineProps {
   onSelectBlock: (blockId: string) => void;
   selectedBlockId: string | null;
   lunchRule: LunchBreakRule;
+  eveningRule: EveningBreakRule;
   onSplitBlock: (blockId: string) => void;
   onMergeBlocks: (blockId: string) => void;
   fontSize: number;
@@ -29,6 +30,7 @@ const Timeline: React.FC<TimelineProps> = ({
   onSelectBlock,
   selectedBlockId,
   lunchRule,
+  eveningRule,
   onSplitBlock,
   onMergeBlocks,
   fontSize,
@@ -39,12 +41,15 @@ const Timeline: React.FC<TimelineProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [draggingBlock, setDraggingBlock] = useState<{ id: string, initialX: number, initialY: number, initialStart: number, initialLane: number } | null>(null);
 
-  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+  // 7 Days of Hours
+  const days = Array.from({ length: DAYS_IN_WEEK }, (_, i) => i);
+  const hoursPerDay = Array.from({ length: 24 }, (_, i) => i);
+  
   const resourceConflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);
   
   const currentPPM = PIXELS_PER_MINUTE * zoom;
   const laneSize = 160 * zoom; 
-  const HEADER_HEIGHT = 64; 
+  const HEADER_HEIGHT = 80; // Slightly taller for Day labels
 
   const startDrag = (clientX: number, clientY: number, block: TimeBlock) => {
     if (block.isLocked) return;
@@ -69,7 +74,9 @@ const Timeline: React.FC<TimelineProps> = ({
 
     // Time Axis Movement (Snap to 15 mins)
     const timeDelta = Math.round(deltaX / currentPPM / 15) * 15;
-    const newStart = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - block.duration, draggingBlock.initialStart + timeDelta));
+    // Limit to 7 days
+    const maxMinutes = DAYS_IN_WEEK * 24 * 60;
+    const newStart = Math.max(0, Math.min(maxMinutes - block.duration, draggingBlock.initialStart + timeDelta));
     
     // Lane Axis Movement
     const laneDelta = Math.round(deltaY / laneSize);
@@ -118,9 +125,9 @@ const Timeline: React.FC<TimelineProps> = ({
         const dep = blocks.find(b => b.id === depId);
         if (!dep) return null;
 
-        const depTimePos = (dep.startTime - START_HOUR * 60) * currentPPM;
+        const depTimePos = dep.startTime * currentPPM;
         const depSize = dep.duration * currentPPM;
-        const blockTimePos = (block.startTime - START_HOUR * 60) * currentPPM;
+        const blockTimePos = block.startTime * currentPPM;
         const depLanePos = HEADER_HEIGHT + (dep.lane * laneSize);
         const blockLanePos = HEADER_HEIGHT + (block.lane * laneSize);
 
@@ -145,8 +152,8 @@ const Timeline: React.FC<TimelineProps> = ({
     </svg>
   );
 
-  const contentWidth = (END_HOUR - START_HOUR + 1) * MINUTES_IN_HOUR * currentPPM + (150 * zoom);
-  const contentHeight = (getMaxLane(blocks) + 1) * laneSize + (100 * zoom);
+  const contentWidth = DAYS_IN_WEEK * 24 * 60 * currentPPM + (400 * zoom);
+  const contentHeight = (Math.max(getMaxLane(blocks), 10) + 5) * laneSize + (400 * zoom);
   const gridHourWidth = 60 * currentPPM;
 
   return (
@@ -155,14 +162,14 @@ const Timeline: React.FC<TimelineProps> = ({
         <div className="flex items-center gap-3">
            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg"><LayoutGrid size={16} /></div>
            <div>
-              <h2 className="text-[10px] lg:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-[0.2em]">Operational Timeline</h2>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{formatTime(START_HOUR * 60)} — {formatTime(END_HOUR * 60)}</p>
+              <h2 className="text-[10px] lg:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-[0.2em]">7-Day Operational Timeline</h2>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Global Manufacturing Schedule</p>
            </div>
         </div>
         <div className="flex items-center gap-2 lg:gap-4">
            {resourceConflicts.size > 0 && (
              <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 px-2 lg:px-3 py-1 lg:py-1.5 rounded-xl text-[9px] lg:text-[10px] font-bold border border-red-100 dark:border-red-900/40 uppercase tracking-widest">
-               Conflict
+               Conflict Detected
              </div>
            )}
            <button onClick={onToggleFullScreen} className="p-2 lg:p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl text-slate-500 transition-all shadow-sm">
@@ -181,7 +188,6 @@ const Timeline: React.FC<TimelineProps> = ({
             height: contentHeight, 
             minWidth: '100%', 
             minHeight: '100%',
-            // The grid background ensures precise hour alignment
             backgroundImage: `linear-gradient(to right, rgba(148, 163, 184, 0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.1) 1px, transparent 1px)`,
             backgroundSize: `${gridHourWidth}px ${laneSize}px`,
             backgroundPosition: `0px ${HEADER_HEIGHT}px`
@@ -190,11 +196,18 @@ const Timeline: React.FC<TimelineProps> = ({
         >
           {renderArrows()}
           
-          <div className="flex sticky top-0 z-40">
-            {hours.map(hour => (
-              <div key={hour} className="relative" style={{ width: gridHourWidth }}>
-                <div className="w-full text-center py-2 h-16 text-[10px] font-bold text-slate-400 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-sm border-b border-r dark:border-dark-border flex items-center justify-center">
-                  {formatTime(hour * 60)}
+          <div className="flex sticky top-0 z-40 bg-white/95 dark:bg-dark-surface/95 border-b dark:border-dark-border">
+            {days.map(day => (
+              <div key={day} className="flex flex-col border-r dark:border-dark-border" style={{ width: 24 * 60 * currentPPM }}>
+                <div className="py-1 text-center bg-indigo-50/50 dark:bg-indigo-900/20 text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 dark:text-indigo-400 border-b dark:border-dark-border">
+                  Day {day + 1}
+                </div>
+                <div className="flex">
+                  {hoursPerDay.map(hour => (
+                    <div key={hour} className="relative flex items-center justify-center border-r dark:border-dark-border last:border-r-0" style={{ width: gridHourWidth, height: 48 }}>
+                       <span className="text-[9px] font-bold text-slate-400">{hour % 12 || 12} {hour >= 12 ? 'PM' : 'AM'}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -202,7 +215,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
           <div className="absolute top-0 left-0 bottom-0 right-0 z-20 pointer-events-none">
             {blocks.map(block => {
-              const timePos = (block.startTime - START_HOUR * 60) * currentPPM;
+              const timePos = block.startTime * currentPPM;
               const timeSize = block.duration * currentPPM;
               const lanePos = HEADER_HEIGHT + (block.lane * laneSize);
               const isSelected = selectedBlockId === block.id;
@@ -219,7 +232,7 @@ const Timeline: React.FC<TimelineProps> = ({
                   className={`absolute rounded-xl border-l-[6px] p-2 sm:p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden
                     ${colorClass} 
                     ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 z-50 scale-[1.01] shadow-xl' : 'z-30 hover:shadow-lg'}
-                    ${hasResourceConflict ? 'border-red-500 ring-2 ring-red-500/20' : ''}
+                    ${hasResourceConflict ? 'border-red-600 ring-2 ring-red-500/20 shadow-lg shadow-red-500/10' : ''}
                     ${block.isLocked ? 'cursor-not-allowed opacity-90' : ''}
                   `}
                   style={{ left: timePos, top: lanePos, width: timeSize, height: laneSize - (16 * zoom), minWidth: '12px', touchAction: 'none' }}
@@ -227,8 +240,8 @@ const Timeline: React.FC<TimelineProps> = ({
                   <div className="flex flex-col justify-between h-full">
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold truncate leading-tight" style={{ fontSize: `${Math.max(10, fontSize * zoom)}px` }}>{block.title}</h3>
-                        <p className="text-[8px] sm:text-[9px] font-bold opacity-40 uppercase truncate">{category?.name}</p>
+                        <h3 className="font-bold truncate leading-tight print:text-black" style={{ fontSize: `${Math.max(10, fontSize * zoom)}px` }}>{block.title}</h3>
+                        <p className="text-[8px] sm:text-[9px] font-bold opacity-40 uppercase truncate print:opacity-100 print:text-slate-600">{category?.name}</p>
                       </div>
                       <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity no-print">
                         {isPart && !block.isLocked && <button onClick={(e) => { e.stopPropagation(); onMergeBlocks(block.id); }} className="p-1 hover:bg-white/50 rounded text-indigo-600"><Merge size={14 * zoom} /></button>}
@@ -237,7 +250,7 @@ const Timeline: React.FC<TimelineProps> = ({
                       </div>
                     </div>
                     <div className="flex justify-between items-end">
-                       <p className="font-mono font-bold opacity-60 text-[9px]">{formatTime(block.startTime)} • {block.duration}m</p>
+                       <p className="font-mono font-bold opacity-60 text-[9px] print:opacity-100 print:text-slate-700">{formatTime(block.startTime)} • {block.duration}m</p>
                        {hasResourceConflict && <Boxes size={14 * zoom} className="text-red-600 animate-pulse" />}
                     </div>
                   </div>
@@ -246,19 +259,35 @@ const Timeline: React.FC<TimelineProps> = ({
             })}
           </div>
 
-          {lunchRule.enabled && (
-            <div className="absolute bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 pointer-events-none z-10 border-x h-full top-0"
-              style={{ 
-                left: (lunchRule.startTime - START_HOUR * 60) * currentPPM, 
-                width: (lunchRule.endTime - lunchRule.startTime) * currentPPM 
-              }}
-            >
-              <div className="absolute top-2 left-2 flex items-center gap-1.5 opacity-60">
-                <div className="p-1 bg-amber-500 text-white rounded"><LayoutGrid size={8} /></div>
-                <span className="text-[8px] font-black uppercase tracking-[0.3em] text-amber-600">Break Window</span>
-              </div>
-            </div>
-          )}
+          {days.map(day => (
+            <React.Fragment key={`breaks-${day}`}>
+              {lunchRule.enabled && (
+                <div className="absolute bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 pointer-events-none z-10 border-x h-full top-0"
+                  style={{ 
+                    left: (day * 24 * 60 + lunchRule.startTime) * currentPPM, 
+                    width: (lunchRule.endTime - lunchRule.startTime) * currentPPM 
+                  }}
+                >
+                  <div className="absolute top-24 left-2 flex items-center gap-1.5 opacity-60">
+                    <Coffee size={10} className="text-amber-600" />
+                  </div>
+                </div>
+              )}
+
+              {eveningRule.enabled && (
+                <div className="absolute bg-indigo-500/5 dark:bg-indigo-500/10 border-indigo-500/20 pointer-events-none z-10 border-x h-full top-0"
+                  style={{ 
+                    left: (day * 24 * 60 + eveningRule.startTime) * currentPPM, 
+                    width: (eveningRule.endTime - eveningRule.startTime) * currentPPM 
+                  }}
+                >
+                  <div className="absolute top-24 left-2 flex items-center gap-1.5 opacity-60">
+                    <Moon size={10} className="text-indigo-600" />
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
         </div>
       </div>
     </div>

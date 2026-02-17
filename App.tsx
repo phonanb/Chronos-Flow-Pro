@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule } from './types';
+import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule } from './types';
 import Sidebar from './components/Sidebar';
 import Timeline from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
@@ -26,6 +26,7 @@ const App: React.FC = () => {
   const [resources, setResources] = useState<Resource[]>(() => loadState('cfp_resources', INITIAL_RESOURCES));
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [lunchRule, setLunchRule] = useState<LunchBreakRule>(() => loadState('cfp_lunchRule', { enabled: true, startTime: 720, endTime: 780 }));
+  const [eveningRule, setEveningRule] = useState<EveningBreakRule>(() => loadState('cfp_eveningRule', { enabled: true, startTime: 1020, endTime: 1050 }));
   const [isDarkMode, setIsDarkMode] = useState(() => loadState('cfp_darkMode', true));
   const [zoom, setZoom] = useState(() => loadState('cfp_zoom', 1.0));
   const [mobileTab, setMobileTab] = useState<MobileTab>('timeline');
@@ -45,11 +46,12 @@ const App: React.FC = () => {
     localStorage.setItem('cfp_categories', JSON.stringify(categories));
     localStorage.setItem('cfp_resources', JSON.stringify(resources));
     localStorage.setItem('cfp_lunchRule', JSON.stringify(lunchRule));
+    localStorage.setItem('cfp_eveningRule', JSON.stringify(eveningRule));
     localStorage.setItem('cfp_darkMode', JSON.stringify(isDarkMode));
     localStorage.setItem('cfp_zoom', JSON.stringify(zoom));
     localStorage.setItem('cfp_leftWidth', JSON.stringify(leftWidth));
     localStorage.setItem('cfp_rightWidth', JSON.stringify(rightWidth));
-  }, [blocks, profiles, categories, resources, lunchRule, isDarkMode, zoom, leftWidth, rightWidth]);
+  }, [blocks, profiles, categories, resources, lunchRule, eveningRule, isDarkMode, zoom, leftWidth, rightWidth]);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
@@ -89,7 +91,7 @@ const App: React.FC = () => {
       title: profile.name,
       originalTitle: profile.name,
       description: '',
-      startTime: (START_HOUR + 1) * 60,
+      startTime: 480, // Start at 8:00 AM by default
       duration: profile.defaultDuration,
       categoryId: profile.categoryId,
       dependencies: [],
@@ -113,16 +115,28 @@ const App: React.FC = () => {
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
     const blockEndTime = block.startTime + block.duration;
-    const splitPoint = (lunchRule.enabled && block.startTime < lunchRule.endTime && blockEndTime > lunchRule.startTime)
-      ? lunchRule.startTime : block.startTime + Math.floor(block.duration / 2);
+    
+    // Check lunch first, then evening
+    let splitPoint = block.startTime + Math.floor(block.duration / 2);
+    if (lunchRule.enabled && block.startTime < lunchRule.endTime && blockEndTime > lunchRule.startTime) {
+      splitPoint = lunchRule.startTime;
+    } else if (eveningRule.enabled && block.startTime < eveningRule.endTime && blockEndTime > eveningRule.startTime) {
+      splitPoint = eveningRule.startTime;
+    }
+
     const firstDuration = splitPoint - block.startTime;
     const secondDuration = blockEndTime - splitPoint;
     if (firstDuration < 15 || secondDuration < 15) {
       alert("Cannot split block: segments too short.");
       return;
     }
+
+    let resumeTime = splitPoint;
+    if (lunchRule.enabled && splitPoint === lunchRule.startTime) resumeTime = lunchRule.endTime;
+    else if (eveningRule.enabled && splitPoint === eveningRule.startTime) resumeTime = eveningRule.endTime;
+
     const part1: TimeBlock = { ...block, id: Math.random().toString(36).substr(2, 9), title: `${block.title} (Part A)`, duration: firstDuration };
-    const part2: TimeBlock = { ...block, id: Math.random().toString(36).substr(2, 9), title: `${block.title} (Part B)`, startTime: lunchRule.enabled && splitPoint === lunchRule.startTime ? lunchRule.endTime : splitPoint, duration: secondDuration, dependencies: [...block.dependencies, part1.id] };
+    const part2: TimeBlock = { ...block, id: Math.random().toString(36).substr(2, 9), title: `${block.title} (Part B)`, startTime: resumeTime, duration: secondDuration, dependencies: [...block.dependencies, part1.id] };
     setBlocks(prev => [...prev.filter(b => b.id !== blockId), part1, part2]);
     setSelectedBlockId(part2.id);
   };
@@ -149,6 +163,7 @@ const App: React.FC = () => {
         if (data.categories) setCategories(data.categories);
         if (data.resources) setResources(data.resources);
         if (data.lunchRule) setLunchRule(data.lunchRule);
+        if (data.eveningRule) setEveningRule(data.eveningRule);
       } catch (err) { alert("Invalid .CFP format."); }
     };
     reader.readAsText(file);
@@ -189,10 +204,12 @@ const App: React.FC = () => {
           <Sidebar 
             profiles={profiles} categories={categories} resources={resources}
             onUpdateProfiles={setProfiles} onUpdateCategories={setCategories} onUpdateResources={setResources}
-            onAddBlockFromProfile={handleAddBlockFromProfile} lunchRule={lunchRule} onUpdateLunchRule={setLunchRule}
+            onAddBlockFromProfile={handleAddBlockFromProfile} 
+            lunchRule={lunchRule} onUpdateLunchRule={setLunchRule}
+            eveningRule={eveningRule} onUpdateEveningRule={setEveningRule}
             isOpen={isLeftPanelOpen || mobileTab === 'sidebar'}
             onToggle={() => { if (isMobile) setMobileTab('timeline'); else setIsLeftPanelOpen(!isLeftPanelOpen); }}
-            onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule}), 'chronos_export.cfp', 'application/json')}
+            onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule, eveningRule}), 'chronos_export.cfp', 'application/json')}
             onImportCFP={handleImportCFP}
             onExportCSV={() => downloadFile(generateCSV(blocks, categories, resources), 'schedule.csv', 'text/csv')}
             onExportPDF={() => { setIsCenterFullScreen(true); setTimeout(() => { window.print(); setIsCenterFullScreen(false); }, 500); }}
@@ -216,7 +233,9 @@ const App: React.FC = () => {
                   blocks={blocks} categories={categories}
                   onUpdateBlock={handleUpdateBlock} onDeleteBlock={(id) => setBlocks(prev => prev.filter(b => b.id !== id))} 
                   onSelectBlock={(id) => { setSelectedBlockId(id); if (isMobile && id) setMobileTab('detail'); }} 
-                  selectedBlockId={selectedBlockId} lunchRule={lunchRule} onSplitBlock={handleSplitBlock} onMergeBlocks={handleMergeBlocks}
+                  selectedBlockId={selectedBlockId} 
+                  lunchRule={lunchRule} eveningRule={eveningRule}
+                  onSplitBlock={handleSplitBlock} onMergeBlocks={handleMergeBlocks}
                   fontSize={12} zoom={zoom} isFullScreen={isCenterFullScreen} onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
                 />
               )}

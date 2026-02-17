@@ -1,12 +1,13 @@
 
-import { TimeBlock, Category, Resource, ProfileBlock, LunchBreakRule } from './types';
+import { TimeBlock, Category, Resource } from './types';
 
 export const formatTime = (minutes: number): string => {
-  const h = Math.floor(minutes / 60);
+  const day = Math.floor(minutes / (24 * 60)) + 1;
+  const h = Math.floor((minutes % (24 * 60)) / 60);
   const m = minutes % 60;
   const ampm = h >= 12 ? 'PM' : 'AM';
   const displayH = h % 12 || 12;
-  return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
+  return `D${day} ${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
 };
 
 export const checkOverlaps = (start1: number, end1: number, start2: number, end2: number): boolean => {
@@ -21,10 +22,32 @@ export const findResourceConflicts = (blocks: TimeBlock[]) => {
       const b1 = blocks[i];
       const b2 = blocks[j];
       
-      const timeOverlap = checkOverlaps(b1.startTime, b1.startTime + b1.duration, b2.startTime, b2.startTime + b2.duration);
-      if (timeOverlap) {
-        const sharedResources = b1.resourceIds.filter(id => b2.resourceIds.includes(id));
-        if (sharedResources.length > 0) {
+      const start1 = b1.startTime;
+      const end1 = b1.startTime + b1.duration;
+      const start2 = b2.startTime;
+      const end2 = b2.startTime + b2.duration;
+
+      // Rule 1: Standard Shared Resource Conflict (Same resource at the same time)
+      const sharedResources = b1.resourceIds.filter(id => b2.resourceIds.includes(id));
+      if (sharedResources.length > 0 && checkOverlaps(start1, end1, start2, end2)) {
+        conflicts.add(b1.id);
+        conflicts.add(b2.id);
+        continue;
+      }
+
+      // Rule 2: Special Autoclave A and B Delay Rule (Must have 30m gap)
+      const isAutoA1 = b1.resourceIds.includes('res-auto-a');
+      const isAutoB1 = b1.resourceIds.includes('res-auto-b');
+      const isAutoA2 = b2.resourceIds.includes('res-auto-a');
+      const isAutoB2 = b2.resourceIds.includes('res-auto-b');
+
+      const involvesAandB = (isAutoA1 && isAutoB2) || (isAutoB1 && isAutoA2);
+      
+      if (involvesAandB) {
+        // Condition for valid: end1 + 30 <= start2 OR end2 + 30 <= start1
+        // Conflict if NOT valid
+        const gapConflict = !(end1 + 30 <= start2 || end2 + 30 <= start1);
+        if (gapConflict) {
           conflicts.add(b1.id);
           conflicts.add(b2.id);
         }

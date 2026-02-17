@@ -1,8 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { ProfileBlock, Category, Resource, LunchBreakRule } from '../types';
+import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule } from '../types';
 import { COLOR_MAP } from '../constants';
-import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, Check, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText } from 'lucide-react';
+import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText, Moon } from 'lucide-react';
 import { reorder, formatTime } from '../utils';
 
 const InputLabel = ({ children }: { children?: React.ReactNode }) => (
@@ -21,6 +21,8 @@ interface SidebarProps {
   onUpdateResources: (resources: Resource[]) => void;
   lunchRule: LunchBreakRule;
   onUpdateLunchRule: (rule: LunchBreakRule) => void;
+  eveningRule: EveningBreakRule;
+  onUpdateEveningRule: (rule: EveningBreakRule) => void;
   isOpen: boolean;
   onToggle: () => void;
   onExportCFP: () => void;
@@ -32,7 +34,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ 
   profiles, categories, resources, 
   onAddBlockFromProfile, onUpdateProfiles, onUpdateCategories, onUpdateResources,
-  lunchRule, onUpdateLunchRule, isOpen, onToggle,
+  lunchRule, onUpdateLunchRule, eveningRule, onUpdateEveningRule, isOpen, onToggle,
   onExportCFP, onImportCFP, onExportCSV, onExportPDF
 }) => {
   const [activeTab, setActiveTab] = useState<'templates' | 'categories' | 'resources' | 'rules'>('templates');
@@ -59,7 +61,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     setDraggedIdx(idx);
   };
 
-  // Only show thin strip on non-mobile devices
   if (!isOpen && !isMobile) {
     return (
       <div className="hidden lg:flex w-full sidebar-container bg-white dark:bg-dark-surface border-r dark:border-dark-border flex-col items-center py-4 gap-6 h-full transition-all shrink-0">
@@ -218,6 +219,31 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
              </div>
 
+             <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                   <div className="flex items-center gap-2"><Moon size={14} className="text-indigo-600" /><label className="text-xs font-bold text-slate-600 dark:text-slate-300">Evening Break</label></div>
+                   <input type="checkbox" checked={eveningRule.enabled} onChange={(e) => onUpdateEveningRule({ ...eveningRule, enabled: e.target.checked })} className="w-4 h-4 rounded bg-white dark:bg-slate-900 border dark:border-slate-700 text-indigo-600" />
+                </div>
+                {eveningRule.enabled && (
+                  <div className="space-y-3 mt-4">
+                     <div>
+                       <InputLabel>Start Time</InputLabel>
+                       <div className="flex items-center gap-3">
+                         <input type="number" step="15" className={inputClasses} value={eveningRule.startTime} onChange={(e) => onUpdateEveningRule({...eveningRule, startTime: parseInt(e.target.value)})}/>
+                         <span className="text-[9px] whitespace-nowrap text-slate-400">{formatTime(eveningRule.startTime)}</span>
+                       </div>
+                     </div>
+                     <div>
+                       <InputLabel>End Time</InputLabel>
+                       <div className="flex items-center gap-3">
+                         <input type="number" step="15" className={inputClasses} value={eveningRule.endTime} onChange={(e) => onUpdateEveningRule({...eveningRule, endTime: parseInt(e.target.value)})}/>
+                         <span className="text-[9px] whitespace-nowrap text-slate-400">{formatTime(eveningRule.endTime)}</span>
+                       </div>
+                     </div>
+                  </div>
+                )}
+             </div>
+
              <div className="space-y-3">
                 <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Project Management</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
@@ -248,7 +274,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Modals remain same but use z-[100] for mobile overlap */}
       {editingProfile && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingProfile(null)}>
           <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 border dark:border-slate-700" onClick={e => e.stopPropagation()}>

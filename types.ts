@@ -41,3 +41,9 @@ export interface LunchBreakRule {
   startTime: number;
   endTime: number;
 }
+
+export interface EveningBreakRule {
+  enabled: boolean;
+  startTime: number;
+  endTime: number;
+}

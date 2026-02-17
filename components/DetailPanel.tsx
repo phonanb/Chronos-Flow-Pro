@@ -14,6 +14,16 @@ interface DetailPanelProps {
   onToggle: () => void;
 }
 
+// Fixed SectionLabel to use React.FC for better JSX children support and typed the icon prop properly
+const SectionLabel: React.FC<{ children: React.ReactNode; icon?: React.ElementType }> = ({ children, icon: Icon }) => (
+  <div className="flex items-center gap-2 mb-3">
+    {Icon && <Icon size={14} className="text-slate-400" />}
+    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.15em]">
+      {children}
+    </label>
+  </div>
+);
+
 const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories, resources, onUpdate, onClose, isOpen, onToggle }) => {
   const isMobile = window.innerWidth < 1024;
 
@@ -29,15 +39,6 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
       </div>
     );
   }
-
-  const SectionLabel = ({ children, icon: Icon }: { children: React.ReactNode, icon?: any }) => (
-    <div className="flex items-center gap-2 mb-3">
-      {Icon && <Icon size={14} className="text-slate-400" />}
-      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.15em]">
-        {children}
-      </label>
-    </div>
-  );
 
   if (!block) return (
     <div className="w-full h-full bg-white dark:bg-dark-surface flex flex-col items-center justify-center text-center p-8 text-slate-400 relative">
