@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot } from './types';
 import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
 import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES, DAYS_IN_WEEK } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X, Sparkles, Copy, Trash2, Undo2, Redo2, History } from 'lucide-react';
-import { downloadFile, generateCSV } from './utils';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X, Sparkles, Copy, Trash2, Undo2, Redo2, History, AlertTriangle } from 'lucide-react';
+import { downloadFile, generateCSV, findResourceConflicts } from './utils';
 import { GoogleGenAI, Type } from "@google/genai";
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
@@ -39,7 +39,6 @@ const App: React.FC = () => {
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [isShortening, setIsShortening] = useState(false);
   
-  // Undo/Redo Stacks
   const [undoStack, setUndoStack] = useState<TimeBlock[][]>([]);
   const [redoStack, setRedoStack] = useState<TimeBlock[][]>([]);
 
@@ -50,6 +49,8 @@ const App: React.FC = () => {
 
   const timelineRef = useRef<TimelineRef>(null);
   const resizingRef = useRef<'left' | 'right' | null>(null);
+
+  const conflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);
 
   // Persistence
   useEffect(() => {
@@ -71,26 +72,7 @@ const App: React.FC = () => {
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
-  // Keyboard Listeners
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        handleUndo();
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault();
-        handleRedo();
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedBlockIds.length > 0) handleDeleteBlocks(selectedBlockIds);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBlockIds, blocks, undoStack, redoStack]);
-
+  // Command History Logic
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
@@ -108,12 +90,11 @@ const App: React.FC = () => {
   }, [blocks, redoStack]);
 
   const recordChange = useCallback((newBlocks: TimeBlock[]) => {
-    setUndoStack(prev => [...prev, blocks].slice(-50)); // Keep last 50
+    setUndoStack(prev => [...prev, blocks].slice(-50)); 
     setRedoStack([]);
     setBlocks(newBlocks);
   }, [blocks]);
 
-  // Snapshot Management
   const takeSnapshot = (name?: string) => {
     const newSnapshot: Snapshot = {
       id: Math.random().toString(36).substr(2, 9),
@@ -126,40 +107,40 @@ const App: React.FC = () => {
       lunchRule,
       eveningRule
     };
-    setHistory(prev => [newSnapshot, ...prev].slice(0, 20)); // Keep 20 versions
+    setHistory(prev => [newSnapshot, ...prev].slice(0, 30));
   };
 
   const restoreSnapshot = (snapshot: Snapshot) => {
-    if (!confirm(`Restore to "${snapshot.name}"? Current unsaved changes will be lost.`)) return;
+    if (!confirm(`Restore to "${snapshot.name}"? Current timeline will be archived.`)) return;
+    recordChange(blocks); // Save current to undo stack
     setBlocks(snapshot.blocks);
     setProfiles(snapshot.profiles);
     setCategories(snapshot.categories);
     setResources(snapshot.resources);
     setLunchRule(snapshot.lunchRule);
     setEveningRule(snapshot.eveningRule);
-    setUndoStack([]);
-    setRedoStack([]);
-    alert(`Restored to ${snapshot.name}`);
   };
 
   const handleAiGenerate = async () => {
     if (isAiGenerating) return;
-    takeSnapshot(`Auto-Save before AI Gen`);
+    takeSnapshot(`Auto-Checkpoint: AI Generation`);
     setIsAiGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate an optimal 7-day industrial schedule. 
+      const prompt = `System Unit Architect: Generate an optimal 7-day schedule for a manufacturing facility.
+      Total Minutes: 10080. 
+      Templates: ${JSON.stringify(profiles.map(p => ({ id: p.id, name: p.name, dur: p.defaultDuration, res: p.resourceIds })))}
       Categories: ${JSON.stringify(categories)}
-      Resources: ${JSON.stringify(resources)}
-      Templates: ${JSON.stringify(profiles)}
-      Breaks: Lunch (${JSON.stringify(lunchRule)}), Evening (${JSON.stringify(eveningRule)})
-      Constraints: No equipment conflicts, 30m stagger for Autoclaves, distribute across all 10080 mins.`;
+      Equipment List: ${JSON.stringify(resources.map(r => r.id))}
+      Break Logic: Lunch (${JSON.stringify(lunchRule)}), Evening (${JSON.stringify(eveningRule)})
+      Rules: No resource conflicts. Autoclave starts must be staggered by 30 mins. 
+      Distribute across 8-10 parallel lanes.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: prompt,
         config: {
-          systemInstruction: "You are a Master Production Scheduler. Generate a valid array of TimeBlock JSON objects.",
+          systemInstruction: "Output a valid JSON array of TimeBlock objects. Use provided IDs.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -171,8 +152,8 @@ const App: React.FC = () => {
                 startTime: { type: Type.INTEGER },
                 duration: { type: Type.INTEGER },
                 categoryId: { type: Type.STRING },
-                dependencies: { type: Type.ARRAY, items: { type: Type.STRING } },
                 resourceIds: { type: Type.ARRAY, items: { type: Type.STRING } },
+                dependencies: { type: Type.ARRAY, items: { type: Type.STRING } },
                 lane: { type: Type.INTEGER }
               },
               required: ["id", "title", "startTime", "duration", "categoryId", "resourceIds", "lane"]
@@ -182,10 +163,13 @@ const App: React.FC = () => {
       });
 
       const result = JSON.parse(response.text.trim() || '[]');
-      if (result.length > 0) recordChange(result);
+      if (Array.isArray(result) && result.length > 0) {
+        recordChange(result);
+        setTimeout(() => timelineRef.current?.scrollToFirstBlock(), 300);
+      }
     } catch (error) {
-      console.error(error);
-      alert("AI Generation Error.");
+      console.error("AI Generation Error", error);
+      alert("Failed to synthesize schedule. Ensure equipment IDs are unique.");
     } finally {
       setIsAiGenerating(false);
     }
@@ -193,16 +177,26 @@ const App: React.FC = () => {
 
   const handleShare = async () => {
     setIsShortening(true);
-    const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify({ blocks, profiles, categories, resources, lunchRule, eveningRule }))))}`;
-    let finalUrl = longUrl;
     try {
+      const state = { blocks, profiles, categories, resources, lunchRule, eveningRule };
+      const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify(state))))}`;
+      let finalUrl = longUrl;
       const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
       if (res.ok) finalUrl = await res.text();
-    } catch (e) {}
-    navigator.clipboard.writeText(finalUrl).then(() => {
+      
+      await navigator.clipboard.writeText(finalUrl);
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
-    }).finally(() => setIsShortening(false));
+    } catch (e) {
+      console.error("Link shortening failed", e);
+      // Fallback to clipboard long URL
+      const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify({ blocks, profiles, categories, resources, lunchRule, eveningRule }))))}`;
+      await navigator.clipboard.writeText(longUrl);
+      setShareFeedback(true);
+      setTimeout(() => setShareFeedback(false), 2000);
+    } finally {
+      setIsShortening(false);
+    }
   };
 
   const handleAddBlockAtPosition = (profile: ProfileBlock, startTime: number, lane: number) => {
@@ -225,91 +219,40 @@ const App: React.FC = () => {
     setSelectedBlockIds([newBlock.id]);
   };
 
-  const handleUpdateBlock = (updated: TimeBlock) => {
-    recordChange(blocks.map(b => b.id === updated.id ? updated : b));
-  };
-
+  const handleUpdateBlock = (updated: TimeBlock) => recordChange(blocks.map(b => b.id === updated.id ? updated : b));
   const handleDeleteBlocks = (ids: string[]) => {
+    if (ids.length === 0) return;
     recordChange(blocks.filter(b => !ids.includes(b.id)));
-    setSelectedBlockIds(prev => prev.filter(id => !ids.includes(id)));
+    setSelectedBlockIds([]);
   };
 
   const handleDuplicateBlocks = (ids: string[]) => {
-    const newBlocks = blocks.filter(b => ids.includes(b.id)).map(b => ({
+    const copies = blocks.filter(b => ids.includes(b.id)).map(b => ({
       ...b,
       id: Math.random().toString(36).substr(2, 9),
       startTime: b.startTime + 60,
       lane: b.lane + 1,
       dependencies: []
     }));
-    recordChange([...blocks, ...newBlocks]);
-    setSelectedBlockIds(newBlocks.map(nb => nb.id));
+    recordChange([...blocks, ...copies]);
+    setSelectedBlockIds(copies.map(c => c.id));
   };
 
-  // Helper for adding from sidebar button
-  const handleAddBlockFromProfile = (profile: ProfileBlock) => {
-    handleAddBlockAtPosition(profile, 0, 0);
-  };
-
-  // Import CFP file handler
-  const handleImportCFP = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = JSON.parse(e.target?.result as string);
-        if (content.blocks) setBlocks(content.blocks);
-        if (content.profiles) setProfiles(content.profiles);
-        if (content.categories) setCategories(content.categories);
-        if (content.resources) setResources(content.resources);
-        if (content.lunchRule) setLunchRule(content.lunchRule);
-        if (content.eveningRule) setEveningRule(content.eveningRule);
-        alert('Import successful');
-      } catch (err) {
-        alert('Failed to parse CFP file');
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // PDF Export using browser print
-  const handleExportPDF = () => {
-    window.print();
-  };
-
-  // Split logic for units
-  const handleSplitBlock = (id: string) => {
-    const block = blocks.find(b => b.id === id);
-    if (!block || block.duration <= 30) return;
-    const half = Math.floor(block.duration / 2 / 15) * 15;
-    const b1: TimeBlock = { ...block, duration: half, title: `${block.title} (Part 1)` };
-    const b2: TimeBlock = { 
-      ...block, 
-      id: Math.random().toString(36).substr(2, 9), 
-      startTime: block.startTime + half, 
-      duration: block.duration - half, 
-      title: `${block.title} (Part 2)` 
-    };
-    recordChange(blocks.map(b => b.id === id ? b1 : b).concat(b2));
-  };
-
-  // Merge logic for split units
-  const handleMergeBlocks = (id: string) => {
-    const block = blocks.find(b => b.id === id);
-    if (!block || !block.title.includes(' (Part ')) return;
-    const baseTitle = block.title.split(' (Part ')[0];
-    const related = blocks.filter(b => b.title.startsWith(baseTitle) && b.lane === block.lane);
-    if (related.length > 1) {
-      const sorted = [...related].sort((a,b) => a.startTime - b.startTime);
-      const first = sorted[0];
-      const merged: TimeBlock = { 
-        ...first, 
-        title: baseTitle, 
-        duration: sorted.reduce((acc, curr) => acc + curr.duration, 0) 
-      };
-      const others = sorted.slice(1).map(s => s.id);
-      recordChange(blocks.filter(b => !others.includes(b.id)).map(b => b.id === first.id ? merged : b));
-    } else {
-      handleUpdateBlock({...block, title: baseTitle});
+  // Split logic based on user rules
+  const handleAutoSplit = (id: string) => {
+    const b = blocks.find(x => x.id === id);
+    if (!b) return;
+    const end = b.startTime + b.duration;
+    
+    // Check lunch
+    if (lunchRule.enabled && b.startTime < lunchRule.endTime && end > lunchRule.startTime) {
+       const firstDur = lunchRule.startTime - b.startTime;
+       const secondDur = end - lunchRule.startTime;
+       if (firstDur < 15 || secondDur < 15) return; // Too small
+       
+       const p1 = { ...b, duration: firstDur, title: `${b.title} (Am)` };
+       const p2 = { ...b, id: Math.random().toString(36).substr(2, 9), startTime: lunchRule.endTime, duration: secondDur - (lunchRule.endTime - lunchRule.startTime), title: `${b.title} (Pm)` };
+       recordChange(blocks.map(x => x.id === id ? p1 : x).concat(p2));
     }
   };
 
@@ -319,34 +262,33 @@ const App: React.FC = () => {
   return (
     <div className="h-screen bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-slate-100 flex flex-col overflow-hidden select-none transition-colors duration-300">
       {!isCenterFullScreen && (
-        <nav className="h-14 lg:h-16 bg-white dark:bg-dark-surface border-b dark:border-dark-border px-4 lg:px-6 flex items-center justify-between z-50 shrink-0 shadow-sm no-print">
+        <nav className="h-14 lg:h-16 bg-white dark:bg-dark-surface border-b dark:border-dark-border px-4 lg:px-6 flex items-center justify-between z-[60] shrink-0 shadow-sm no-print">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20"><Layers size={18} /></div>
             <h1 className="hidden sm:block text-sm lg:text-lg font-bold tracking-tight">Chronos Flow Pro</h1>
           </div>
           
           <div className="flex items-center gap-2 lg:gap-4">
+             {conflicts.size > 0 && (
+               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-100 dark:border-red-900/30 text-[10px] font-black tracking-widest animate-pulse">
+                  <AlertTriangle size={14} /> {conflicts.size} Resource Violations
+               </div>
+             )}
+
              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border dark:border-slate-700">
                 <button onClick={handleUndo} disabled={undoStack.length === 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 disabled:opacity-25 transition-all" title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
                 <button onClick={handleRedo} disabled={redoStack.length === 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 disabled:opacity-25 transition-all" title="Redo (Ctrl+Y)"><Redo2 size={16} /></button>
              </div>
 
-             <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
-                <button onClick={() => setZoom(Math.max(0.4, zoom - 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500"><ZoomOut size={14} /></button>
-                <span className="text-[10px] font-bold text-slate-400 min-w-[36px] text-center">{Math.round(zoom * 100)}%</span>
-                <button onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500"><ZoomIn size={14} /></button>
-             </div>
-
-             <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
-                <button onClick={() => setIsDonateOpen(true)} className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-pink-50 dark:bg-pink-900/20 text-pink-600 hover:bg-pink-100 border border-pink-100 shadow-sm"><Heart size={16} fill="currentColor" />Donate</button>
-                <button onClick={handleShare} disabled={isShortening} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white'}`}>
+             <div className="hidden lg:flex items-center gap-1 border-l dark:border-slate-800 pl-4">
+                <button onClick={handleShare} disabled={isShortening} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'}`}>
                   {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
-                  <span className="hidden sm:inline">{shareFeedback ? 'Copied' : (isShortening ? '...' : 'Share')}</span>
+                  <span className="hidden sm:inline">{shareFeedback ? 'Link Ready' : (isShortening ? 'Shortening...' : 'Share')}</span>
                 </button>
                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
                   {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
-                <button onClick={() => { if(confirm('Reset Workspace?')) { setBlocks([]); setUndoStack([]); setRedoStack([]); } }} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors rounded-xl" title="Reset"><RotateCcw size={18} /></button>
+                <button onClick={() => { if(confirm('Clear all units?')) { recordChange([]); } }} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors rounded-xl"><RotateCcw size={18} /></button>
              </div>
           </div>
         </nav>
@@ -360,21 +302,31 @@ const App: React.FC = () => {
           <Sidebar 
             profiles={profiles} categories={categories} resources={resources}
             onUpdateProfiles={setProfiles} onUpdateCategories={setCategories} onUpdateResources={setResources}
-            onAddBlockFromProfile={handleAddBlockFromProfile} 
+            onAddBlockFromProfile={(p) => handleAddBlockAtPosition(p, 0, 0)} 
             lunchRule={lunchRule} onUpdateLunchRule={setLunchRule}
             eveningRule={eveningRule} onUpdateEveningRule={setEveningRule}
             isOpen={isLeftPanelOpen || mobileTab === 'sidebar'}
             onToggle={() => { if (isMobile) setMobileTab('timeline'); else setIsLeftPanelOpen(!isLeftPanelOpen); }}
             onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule, eveningRule}), 'chronos_export.cfp', 'application/json')}
-            onImportCFP={handleImportCFP}
+            onImportCFP={(f) => {
+              const r = new FileReader(); r.onload = (e) => { 
+                try { 
+                  const d = JSON.parse(e.target?.result as string); 
+                  takeSnapshot('Pre-Import Checkpoint');
+                  if (d.blocks) setBlocks(d.blocks);
+                  if (d.profiles) setProfiles(d.profiles);
+                  alert('Configuration loaded successfully.');
+                } catch(err) { alert('Failed to parse CFP file.'); }
+              }; r.readAsText(f);
+            }}
             onExportCSV={() => downloadFile(generateCSV(blocks, categories, resources), 'schedule.csv', 'text/csv')}
-            onExportPDF={handleExportPDF}
+            onExportPDF={() => window.print()}
             onAiGenerate={handleAiGenerate}
             isAiGenerating={isAiGenerating}
             history={history}
-            onTakeSnapshot={() => takeSnapshot()}
+            onTakeSnapshot={takeSnapshot}
             onRestoreSnapshot={restoreSnapshot}
-            onDeleteSnapshot={(id) => setHistory(prev => prev.filter(s => s.id !== id))}
+            onDeleteSnapshot={(id) => setHistory(h => h.filter(s => s.id !== id))}
           />
         </aside>
 
@@ -389,14 +341,33 @@ const App: React.FC = () => {
                 onSelectBlocks={setSelectedBlockIds}
                 selectedBlockIds={selectedBlockIds} 
                 lunchRule={lunchRule} eveningRule={eveningRule}
-                onSplitBlock={handleSplitBlock} onMergeBlocks={handleMergeBlocks}
+                onSplitBlock={handleAutoSplit}
+                onMergeBlocks={(id) => {
+                  const b = blocks.find(x => x.id === id);
+                  if (b?.title.includes(' (')) {
+                    const base = b.title.split(' (')[0];
+                    const siblings = blocks.filter(x => x.title.startsWith(base) && x.lane === b.lane);
+                    if (siblings.length > 1) {
+                      const first = [...siblings].sort((a,b) => a.startTime - b.startTime)[0];
+                      const totalD = siblings.reduce((acc, curr) => acc + curr.duration, 0);
+                      const others = siblings.filter(x => x.id !== first.id).map(x => x.id);
+                      recordChange(blocks.filter(x => !others.includes(x.id)).map(x => x.id === first.id ? { ...first, title: base, duration: totalD } : x));
+                    }
+                  }
+                }}
                 fontSize={12} zoom={zoom} isFullScreen={isCenterFullScreen} onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
                 onAddBlockAtPosition={handleAddBlockAtPosition}
               />
               {isAiGenerating && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-dark-bg/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-6">
-                   <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin"></div>
-                   <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">Optimizing Schedule...</h2>
+                <div className="absolute inset-0 bg-white/70 dark:bg-dark-bg/70 backdrop-blur-md z-[100] flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
+                   <div className="relative">
+                      <div className="w-24 h-24 border-4 border-indigo-500/10 border-t-indigo-600 rounded-full animate-spin"></div>
+                      <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-500 animate-pulse" size={32} />
+                   </div>
+                   <div className="text-center">
+                      <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest mb-1">Synthesizing</h2>
+                      <p className="text-sm text-slate-400 font-medium animate-pulse">Gemini 3 Pro is generating your flow...</p>
+                   </div>
                 </div>
               )}
            </div>
@@ -419,14 +390,15 @@ const App: React.FC = () => {
 
       {isDonateOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setIsDonateOpen(false)}>
-           <div className="bg-white dark:bg-dark-surface p-8 rounded-3xl shadow-2xl max-w-sm w-full relative flex flex-col items-center border dark:border-dark-border" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setIsDonateOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"><X size={20} /></button>
-              <Heart size={48} fill="#f472b6" className="text-pink-400 mb-6" />
-              <h3 className="text-xl font-bold mb-4">Support Chronos Flow</h3>
-              <div className="bg-white p-4 rounded-2xl shadow-inner border">
-                 <img src="https://img2.pic.in.th/267263.jpg" alt="Thai QR" className="w-64 h-auto rounded-lg mx-auto" />
+           <div className="bg-white dark:bg-dark-surface p-8 rounded-[40px] shadow-2xl max-w-sm w-full relative flex flex-col items-center border dark:border-dark-border" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setIsDonateOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"><X size={24} /></button>
+              <div className="w-16 h-16 bg-pink-100 dark:bg-pink-900/30 text-pink-600 rounded-full flex items-center justify-center mb-6"><Heart size={32} fill="currentColor" /></div>
+              <h3 className="text-2xl font-black mb-2 tracking-tight">Support Open Source</h3>
+              <p className="text-sm text-slate-500 text-center mb-8 px-4 leading-relaxed">If this tool accelerates your planning, consider a small donation to keep the servers running.</p>
+              <div className="bg-white p-6 rounded-3xl shadow-inner border-2 border-slate-100">
+                 <img src="https://img2.pic.in.th/267263.jpg" alt="Thai QR" className="w-64 h-auto rounded-xl mx-auto" />
               </div>
-              <p className="mt-6 text-[11px] text-slate-400 text-center font-medium">Scan with any Thai mobile banking app. Thank you!</p>
+              <p className="mt-8 text-[10px] text-slate-400 text-center font-black uppercase tracking-[0.2em]">Thai PromptPay QR</p>
            </div>
         </div>
       )}
