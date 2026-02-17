@@ -340,10 +340,9 @@ const App: React.FC = () => {
               
               <div className="bg-white p-4 rounded-2xl shadow-inner border dark:border-slate-800">
                  <img 
-                    src="https://images.squarespace-cdn.com/content/v1/5948303f2994cac095a09d3b/1587375269550-B00B0T7P7K0M8X5J4K0B/PromptPay-QR-Code.png" 
+                    src="267263.jpg" 
                     alt="Thai QR Payment" 
                     className="w-64 h-auto rounded-lg mx-auto filter dark:invert-0"
-                    onError={(e) => { e.currentTarget.src = "https://th.bing.com/th/id/OIP.rE7Wn9f8S9z5t6_4_m6n8AHaHa?rs=1&pid=ImgDetMain"; }} 
                  />
                  <div className="mt-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Thai QR Payment | PromptPay</p>
