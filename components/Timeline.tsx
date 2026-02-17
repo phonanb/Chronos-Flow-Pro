@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback, useImperative
 import { TimeBlock, LunchBreakRule, EveningBreakRule, Category, ProfileBlock } from '../types';
 import { START_HOUR, END_HOUR, DAYS_IN_WEEK, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
-import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon, MousePointer2 } from 'lucide-react';
+import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon, MousePointer2, ArrowRight } from 'lucide-react';
 
 export interface TimelineRef {
   scrollToFirstBlock: () => void;
@@ -202,6 +202,58 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   const contentHeight = (Math.max(getMaxLane(blocks), 10) + 5) * laneSize + (400 * zoom);
   const gridHourWidth = 60 * currentPPM;
 
+  /**
+   * Generates SVG path data for dependency arrows
+   */
+  const dependencyPaths = useMemo(() => {
+    const paths: JSX.Element[] = [];
+    
+    blocks.forEach(succ => {
+      if (!succ.dependencies || succ.dependencies.length === 0) return;
+      
+      succ.dependencies.forEach(predId => {
+        const pred = blocks.find(b => b.id === predId);
+        if (!pred) return;
+
+        // Pred center-right
+        const x1 = (pred.startTime + pred.duration) * currentPPM;
+        const y1 = HEADER_HEIGHT + (pred.lane * laneSize) + ((laneSize - (16 * zoom)) / 2);
+        
+        // Succ center-left
+        const x2 = succ.startTime * currentPPM;
+        const y2 = HEADER_HEIGHT + (succ.lane * laneSize) + ((laneSize - (16 * zoom)) / 2);
+
+        const isHighlighted = selectedBlockIds.includes(succ.id) || selectedBlockIds.includes(pred.id);
+        const isBackwards = x1 > x2;
+        
+        // Elbow logic
+        let d = '';
+        if (!isBackwards) {
+          const midX = x1 + (x2 - x1) / 2;
+          d = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+        } else {
+          // Backward link (violation)
+          const offset = 20 * zoom;
+          d = `M ${x1} ${y1} L ${x1 + offset} ${y1} L ${x1 + offset} ${y1 + offset} L ${x2 - offset} ${y1 + offset} L ${x2 - offset} ${y2} L ${x2} ${y2}`;
+        }
+
+        paths.push(
+          <path 
+            key={`${predId}-${succ.id}`}
+            d={d}
+            fill="none"
+            stroke={isHighlighted ? '#6366f1' : 'rgba(148, 163, 184, 0.4)'}
+            strokeWidth={isHighlighted ? 3 : 2}
+            markerEnd={`url(#arrowhead-${isHighlighted ? 'active' : 'idle'})`}
+            className="transition-colors duration-200"
+          />
+        );
+      });
+    });
+    
+    return paths;
+  }, [blocks, currentPPM, laneSize, zoom, selectedBlockIds]);
+
   return (
     <div className={`h-full flex flex-col bg-white dark:bg-dark-surface overflow-hidden timeline-container ${isFullScreen ? 'fixed inset-0 z-[100]' : ''}`}>
       <header className="p-3 lg:p-4 border-b dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/40 z-50 shrink-0 no-print">
@@ -244,6 +296,22 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
           }}
           className="relative"
         >
+          {/* Dependency Arrows Layer */}
+          <svg 
+            className="absolute inset-0 pointer-events-none z-10 no-print" 
+            style={{ width: '100%', height: '100%' }}
+          >
+            <defs>
+              <marker id="arrowhead-idle" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="rgba(148, 163, 184, 0.6)" />
+              </marker>
+              <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" />
+              </marker>
+            </defs>
+            {dependencyPaths}
+          </svg>
+
           {selectionRect && (
             <div 
               className="absolute border-2 border-indigo-500 bg-indigo-500/10 z-[100] pointer-events-none"
