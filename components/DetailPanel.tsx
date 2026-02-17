@@ -15,7 +15,6 @@ interface DetailPanelProps {
   onToggle: () => void;
 }
 
-// Fixed SectionLabel to use React.FC for better JSX children support and typed the icon prop properly
 const SectionLabel: React.FC<{ children: React.ReactNode; icon?: React.ElementType }> = ({ children, icon: Icon }) => (
   <div className="flex items-center gap-2 mb-3">
     {Icon && <Icon size={14} className="text-slate-400" />}
@@ -122,15 +121,25 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
           <SectionLabel icon={Link}>Dependency Logic</SectionLabel>
           <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border dark:border-slate-700 overflow-hidden">
              <div className="max-h-48 overflow-y-auto custom-scrollbar p-2">
-                {availableBlocks.length > 0 ? availableBlocks.map(other => (
-                  <label key={other.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer group">
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${block.dependencies.includes(other.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700'}`}>
-                      {block.dependencies.includes(other.id) && <CheckCircle2 size={10} className="text-white" />}
-                    </div>
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100 truncate flex-1">{other.title || 'Untitled Unit'}</span>
-                    <input type="checkbox" className="hidden" checked={block.dependencies.includes(other.id)} onChange={() => onUpdate({ ...block, dependencies: block.dependencies.includes(other.id) ? block.dependencies.filter(d => d !== other.id) : [...block.dependencies, other.id] })} />
-                  </label>
-                )) : <p className="p-4 text-[10px] text-slate-500 text-center">No other units available</p>}
+                {availableBlocks.length > 0 ? availableBlocks.map(other => {
+                  const otherCategory = categories.find(c => c.id === other.categoryId);
+                  return (
+                    <label key={other.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer group">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${block.dependencies.includes(other.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700'}`}>
+                        {block.dependencies.includes(other.id) && <CheckCircle2 size={10} className="text-white" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-slate-100 truncate">
+                          {other.title || 'Untitled Unit'}
+                        </div>
+                        <div className="text-[9px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-tight">
+                          {otherCategory?.name || 'No Category'}
+                        </div>
+                      </div>
+                      <input type="checkbox" className="hidden" checked={block.dependencies.includes(other.id)} onChange={() => onUpdate({ ...block, dependencies: block.dependencies.includes(other.id) ? block.dependencies.filter(d => d !== other.id) : [...block.dependencies, other.id] })} />
+                    </label>
+                  );
+                }) : <p className="p-4 text-[10px] text-slate-500 text-center">No other units available</p>}
              </div>
           </div>
         </section>
