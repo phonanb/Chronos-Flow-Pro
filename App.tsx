@@ -340,7 +340,7 @@ const App: React.FC = () => {
               
               <div className="bg-white p-4 rounded-2xl shadow-inner border dark:border-slate-800">
                  <img 
-                    src="267263.jpg" 
+                    src="https://img2.pic.in.th/267263.jpg" 
                     alt="Thai QR Payment" 
                     className="w-64 h-auto rounded-lg mx-auto filter dark:invert-0"
                  />
