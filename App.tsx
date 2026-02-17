@@ -5,10 +5,26 @@ import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
 import { INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Share2, Check, Undo2, Redo2, Copy, Trash2, Heart, X, GripVertical } from 'lucide-react';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Share2, Check, Undo2, Redo2, Copy, Trash2, Heart, X, GripVertical, AlertTriangle } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
+
+// Helper utilities for GZIP compression in the browser
+async function compressData(str: string): Promise<string> {
+  const stream = new Blob([str]).stream().pipeThrough(new (window as any).CompressionStream('gzip'));
+  const buffer = await new Response(stream).arrayBuffer();
+  const binary = String.fromCharCode(...new Uint8Array(buffer));
+  return btoa(binary);
+}
+
+async function decompressData(base64: string): Promise<string> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const stream = new Blob([bytes]).stream().pipeThrough(new (window as any).DecompressionStream('gzip'));
+  return await new Response(stream).text();
+}
 
 const App: React.FC = () => {
   const loadState = <T,>(key: string, defaultValue: T): T => {
@@ -51,6 +67,41 @@ const App: React.FC = () => {
 
   const timelineRef = useRef<TimelineRef>(null);
   const hasInitialScrolled = useRef(false);
+
+  // Handle restoring shared data from URL hash
+  useEffect(() => {
+    const handleHashLoad = async () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#share=')) {
+        try {
+          const base64Data = hash.replace('#share=', '');
+          const decompressed = await decompressData(base64Data);
+          const sharedState = JSON.parse(decompressed);
+          
+          if (sharedState.blocks) {
+            if (confirm("Import shared workspace? Current unsaved work will be overwritten.")) {
+              setBlocks(sharedState.blocks);
+              if (sharedState.profiles) setProfiles(sharedState.profiles);
+              if (sharedState.categories) setCategories(sharedState.categories);
+              if (sharedState.resources) setResources(sharedState.resources);
+              if (sharedState.lunchRule) setLunchRule(sharedState.lunchRule);
+              if (sharedState.eveningRule) setEveningRule(sharedState.eveningRule);
+              if (sharedState.groupTemplates) setGroupTemplates(sharedState.groupTemplates);
+              
+              // Clear hash after loading to prevent re-load loops
+              window.history.replaceState(null, '', window.location.pathname);
+              alert("Workspace successfully imported from link.");
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load shared link:", err);
+          alert("This shared link appears to be invalid or truncated.");
+        }
+      }
+    };
+
+    handleHashLoad();
+  }, []);
 
   const startResizingLeft = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -198,10 +249,22 @@ const App: React.FC = () => {
     setIsShortening(true);
     
     try {
-      const state = { blocks, profiles, categories, resources, lunchRule, eveningRule };
-      const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify(state))))}`;
+      const state = { blocks, profiles, categories, resources, lunchRule, eveningRule, groupTemplates };
+      const rawJson = JSON.stringify(state);
+      
+      // STEP 1: Compress the heavy data payload
+      const compressedBase64 = await compressData(rawJson);
+      
+      const longUrl = `${window.location.origin}${window.location.pathname}#share=${compressedBase64}`;
+      
+      // Log for debugging if URL gets dangerously long
+      if (longUrl.length > 20000) {
+        console.warn("Share URL is approaching browser limits:", longUrl.length);
+      }
+
       let finalUrl = longUrl;
       
+      // STEP 2: Attempt to shorten with is.gd for UX, but fall back to long URL
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -212,13 +275,24 @@ const App: React.FC = () => {
           const shortened = await res.text();
           if (shortened && shortened.startsWith('http')) finalUrl = shortened;
         }
-      } catch (e) { console.warn("Shortener failed, using long URL."); }
+      } catch (e) { 
+        console.warn("Shortener failed, using long compressed URL."); 
+        // If the URL is still too long for browsers even after compression, warn user
+        if (longUrl.length > 32000) {
+          alert("Schedule is too large for a link! Please use 'Export Project (.cfp)' instead.");
+          setIsShortening(false);
+          return;
+        }
+      }
 
       await navigator.clipboard.writeText(finalUrl);
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
-    } catch (err) { alert("Clipboard access denied."); }
-    finally { setIsShortening(false); }
+    } catch (err) { 
+      alert("Clipboard access denied."); 
+    } finally { 
+      setIsShortening(false); 
+    }
   };
 
   const handleExportPDF = () => {
@@ -369,7 +443,7 @@ const App: React.FC = () => {
                 </button>
                 <button onClick={handleShare} disabled={isShortening} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'} ${isShortening ? 'opacity-70 animate-pulse' : ''}`}>
                   {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
-                  <span className="hidden sm:inline">{shareFeedback ? 'Copied' : (isShortening ? 'Shortening...' : 'Share')}</span>
+                  <span className="hidden sm:inline">{shareFeedback ? 'Copied' : (isShortening ? 'Compressing...' : 'Share')}</span>
                 </button>
                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
                   {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
