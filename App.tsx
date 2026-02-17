@@ -49,6 +49,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Prevent deleting if user is typing in an input/textarea
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
         
@@ -77,6 +78,7 @@ const App: React.FC = () => {
         if (decodedData.eveningRule) setEveningRule(decodedData.eveningRule);
         
         window.history.replaceState(null, '', window.location.pathname);
+        alert("Configuration loaded from shared link!");
       } catch (e) {
         console.error("Failed to parse shared data", e);
       }
@@ -199,6 +201,8 @@ const App: React.FC = () => {
     let finalUrl = longUrl;
 
     try {
+      // is.gd is a free shortening service that is relatively CORS-friendly for simple requests
+      // However, if it fails, we fallback to the long URL.
       const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
       if (response.ok) {
         finalUrl = await response.text();
@@ -267,9 +271,9 @@ const App: React.FC = () => {
     const newBlocks = blocksToCopy.map(b => ({
       ...b,
       id: Math.random().toString(36).substr(2, 9),
-      startTime: b.startTime + 60,
-      lane: b.lane + 1,
-      dependencies: []
+      startTime: b.startTime + 60, // Shift by 1 hour
+      lane: b.lane + 1, // Shift lane
+      dependencies: [] // Clear dependencies for copy to avoid circular refs
     }));
     setBlocks(prev => [...prev, ...newBlocks]);
     setSelectedBlockIds(newBlocks.map(nb => nb.id));
