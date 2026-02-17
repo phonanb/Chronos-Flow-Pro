@@ -198,34 +198,58 @@ const App: React.FC = () => {
     }
   };
 
-  // Requirement: Share button should shorten link before copy
+  // Requirement: Share button should shorten link BEFORE copy to clipboard
   const handleShare = async () => {
+    if (isShortening) return;
     setIsShortening(true);
-    const state = { blocks, profiles, categories, resources, lunchRule, eveningRule };
-    const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify(state))))}`;
     
-    let finalUrl = longUrl;
     try {
-      const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
-      if (res.ok) {
-        finalUrl = await res.text();
-      }
-    } catch (e) { 
-      console.warn("Shortener failed, using long URL"); 
-    }
+      const state = { blocks, profiles, categories, resources, lunchRule, eveningRule };
+      const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify(state))))}`;
+      
+      let finalUrl = longUrl;
+      
+      // Attempt to shorten via is.gd
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for shortener
+        
+        const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
 
-    navigator.clipboard.writeText(finalUrl).then(() => {
+        if (res.ok) {
+          const shortened = await res.text();
+          if (shortened && shortened.startsWith('http')) {
+            finalUrl = shortened;
+          }
+        }
+      } catch (e) {
+        console.warn("URL shortening failed or timed out, using long URL instead.");
+      }
+
+      // Requirement satisfied: Shortening is done BEFORE writing to clipboard
+      await navigator.clipboard.writeText(finalUrl);
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
-    }).finally(() => setIsShortening(false));
+    } catch (err) {
+      console.error("Failed to copy to clipboard", err);
+      alert("Sharing failed: Clipboard access denied.");
+    } finally {
+      setIsShortening(false);
+    }
   };
 
   // Requirement: Scroll to first box before PDF export
   const handleExportPDF = () => {
-    timelineRef.current?.scrollToFirstBlock();
-    setTimeout(() => {
-      window.print();
-    }, 600);
+    if (timelineRef.current) {
+      timelineRef.current.scrollToFirstBlock();
+      // Small delay to let the UI settle before standard browser print dialog opens
+      setTimeout(() => {
+        window.print();
+      }, 700);
+    }
   };
 
   const handleAddBlockAtPosition = (profile: ProfileBlock, startTime: number, lane: number) => {
@@ -299,7 +323,7 @@ const App: React.FC = () => {
              </div>
 
              <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
-                <button onClick={handleShare} disabled={isShortening} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white'} ${isShortening ? 'opacity-70' : ''}`}>
+                <button onClick={handleShare} disabled={isShortening} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'} ${isShortening ? 'opacity-70 animate-pulse' : ''}`}>
                   {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
                   <span className="hidden sm:inline">{shareFeedback ? 'Copied' : (isShortening ? 'Shortening...' : 'Share')}</span>
                 </button>

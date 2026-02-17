@@ -60,12 +60,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
 
   const scrollToFirstBlock = useCallback(() => {
     if (blocks.length === 0 || !scrollContainerRef.current) return;
-    
-    // Requirement: Scroll to position of first block
     const minStart = Math.min(...blocks.map(b => b.startTime));
-    
-    if (minStart === Infinity) return;
-
     const scrollPos = (minStart * currentPPM) - (100 * zoom);
     scrollContainerRef.current.scrollTo({ 
       left: Math.max(0, scrollPos), 
@@ -111,7 +106,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     const newRect = { ...selectionRect, currentX: x, currentY: y };
     setSelectionRect(newRect);
 
-    // Calculate selection area
+    // Calculate selection
     const x1 = Math.min(newRect.startX, newRect.currentX);
     const x2 = Math.max(newRect.startX, newRect.currentX);
     const y1 = Math.min(newRect.startY, newRect.currentY);
@@ -144,10 +139,11 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     
     const laneDelta = Math.round(deltaY / laneSize);
 
+    // Update the main dragging block
     const mainBlock = blocks.find(b => b.id === draggingBlock.id);
     if (!mainBlock) return;
 
-    // Bulk move all selected items
+    // Apply movement to all selected blocks (bulk move)
     selectedBlockIds.forEach(id => {
       const b = blocks.find(blk => blk.id === id);
       if (!b || b.isLocked) return;
@@ -258,7 +254,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         <div className="flex items-center gap-2 lg:gap-4">
            {selectedBlockIds.length > 0 && (
              <div className="flex items-center gap-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-indigo-100 dark:border-indigo-900/40 uppercase tracking-widest">
-               <MousePointer2 size={12} /> {selectedBlockIds.length} Selection Active
+               <MousePointer2 size={12} /> {selectedBlockIds.length} Selected
              </div>
            )}
            <button onClick={onToggleFullScreen} className="p-2 lg:p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl text-slate-500 transition-all shadow-sm">
