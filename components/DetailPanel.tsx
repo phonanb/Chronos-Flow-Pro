@@ -2,6 +2,7 @@
 import React from 'react';
 import { TimeBlock, Category, Resource } from '../types';
 import { Link, CheckCircle2, X, ArrowDown, ChevronRight, ChevronLeft, Boxes, Clock, Layout, Hash, Tags } from 'lucide-react';
+import { formatTime } from '../utils';
 
 interface DetailPanelProps {
   block: TimeBlock | null;
@@ -84,10 +85,16 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
              
              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border dark:border-slate-700">
-                   <SectionLabel icon={Clock}>Duration (m)</SectionLabel>
-                   <input type="number" min="1" className="w-full bg-transparent text-sm font-bold outline-none text-slate-800 dark:text-slate-100" value={block.duration} onChange={(e) => onUpdate({...block, duration: parseInt(e.target.value) || 1})} />
+                   <SectionLabel icon={Clock}>Start Time (m)</SectionLabel>
+                   <input type="number" min="0" className="w-full bg-transparent text-sm font-bold outline-none text-slate-800 dark:text-slate-100" value={block.startTime} onChange={(e) => onUpdate({...block, startTime: parseInt(e.target.value) || 0})} />
+                   <div className="mt-1 text-[9px] font-bold text-indigo-500 uppercase tracking-wider">{formatTime(block.startTime)}</div>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border dark:border-slate-700">
+                   <SectionLabel icon={Clock}>Duration (m)</SectionLabel>
+                   <input type="number" min="1" className="w-full bg-transparent text-sm font-bold outline-none text-slate-800 dark:text-slate-100" value={block.duration} onChange={(e) => onUpdate({...block, duration: parseInt(e.target.value) || 1})} />
+                   <div className="mt-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">{Math.floor(block.duration / 60)}h {block.duration % 60}m</div>
+                </div>
+                <div className="col-span-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border dark:border-slate-700">
                    <SectionLabel icon={Hash}>System Lane</SectionLabel>
                    <input type="number" min="0" className="w-full bg-transparent text-sm font-bold outline-none text-slate-800 dark:text-slate-100" value={block.lane} onChange={(e) => onUpdate({...block, lane: parseInt(e.target.value) || 0})} />
                 </div>
