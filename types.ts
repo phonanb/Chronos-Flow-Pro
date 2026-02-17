@@ -40,6 +40,7 @@ export interface GroupTemplate {
   id: string;
   name: string;
   blocks: {
+    id: string; // Internal ID used to map dependencies within the group
     title: string;
     duration: number;
     categoryId: string;
@@ -47,6 +48,7 @@ export interface GroupTemplate {
     relativeStartTime: number; // offset from min startTime of group
     relativeLane: number;      // offset from min lane of group
     color: string;
+    dependencies: string[];    // Internal IDs of other blocks in this group
   }[];
 }
 

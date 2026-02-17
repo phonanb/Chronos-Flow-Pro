@@ -317,20 +317,36 @@ const App: React.FC = () => {
   };
 
   const handleAddGroupAtPosition = (template: GroupTemplate, startTime: number, lane: number) => {
-    const newBlocks: TimeBlock[] = template.blocks.map((b, idx) => ({
-      id: `group-${template.id}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
-      title: b.title,
-      description: 'Group Item',
-      startTime: startTime + b.relativeStartTime,
-      duration: b.duration,
-      categoryId: b.categoryId,
-      dependencies: [],
-      resourceIds: [...b.resourceIds],
-      prerequisites: [],
-      color: b.color,
-      isLocked: false,
-      lane: lane + b.relativeLane
-    }));
+    const instanceMap = new Map<string, string>();
+    
+    // First pass: Generate IDs and basic properties
+    const newBlocks: TimeBlock[] = template.blocks.map((tb, idx) => {
+      const newId = `group-${template.id}-${idx}-${Math.random().toString(36).substr(2, 5)}`;
+      instanceMap.set(tb.id, newId);
+      return {
+        id: newId,
+        title: tb.title,
+        description: 'Group Item',
+        startTime: startTime + tb.relativeStartTime,
+        duration: tb.duration,
+        categoryId: tb.categoryId,
+        dependencies: [], // Will fill in second pass
+        resourceIds: [...tb.resourceIds],
+        prerequisites: [],
+        color: tb.color,
+        isLocked: false,
+        lane: lane + tb.relativeLane
+      };
+    });
+
+    // Second pass: Restore internal dependencies
+    newBlocks.forEach((nb, idx) => {
+      const templateBlock = template.blocks[idx];
+      nb.dependencies = templateBlock.dependencies
+        .map(depInternalId => instanceMap.get(depInternalId))
+        .filter((id): id is string => !!id);
+    });
+
     recordChange([...blocks, ...newBlocks]);
     setSelectedBlockIds(newBlocks.map(b => b.id));
   };
@@ -340,18 +356,22 @@ const App: React.FC = () => {
     const selected = blocks.filter(b => selectedBlockIds.includes(b.id));
     const minStart = Math.min(...selected.map(b => b.startTime));
     const minLane = Math.min(...selected.map(b => b.lane));
+    const selectedIds = new Set(selectedBlockIds);
 
     const newTemplate: GroupTemplate = {
       id: Math.random().toString(36).substr(2, 9),
       name,
       blocks: selected.map(b => ({
+        id: b.id,
         title: b.title,
         duration: b.duration,
         categoryId: b.categoryId,
         resourceIds: [...b.resourceIds],
         relativeStartTime: b.startTime - minStart,
         relativeLane: b.lane - minLane,
-        color: b.color
+        color: b.color,
+        // Only save dependencies that are within the selected group
+        dependencies: b.dependencies.filter(depId => selectedIds.has(depId))
       }))
     };
     setGroupTemplates(prev => [...prev, newTemplate]);
@@ -361,7 +381,8 @@ const App: React.FC = () => {
   
   const handleUpdateBlocksBulk = (updatedSet: TimeBlock[]) => {
     const updatedIds = new Set(updatedSet.map(u => u.id));
-    recordChange(blocks.map(b => updatedIds.has(b.id) ? updatedSet.find(u => u.id === b.id)! : b));
+    const newBlocks = blocks.map(b => updatedIds.has(b.id) ? updatedSet.find(u => u.id === b.id)! : b);
+    recordChange(newBlocks);
   };
 
   const handleDeleteBlocks = (ids: string[]) => { recordChange(blocks.filter(b => !ids.includes(b.id))); setSelectedBlockIds([]); };
@@ -532,7 +553,9 @@ const App: React.FC = () => {
           )}
           <DetailPanel 
             blocks={selectedBlocks} allBlocks={blocks} categories={categories} resources={resources}
-            onUpdate={handleUpdateBlock} onClose={() => setSelectedBlockIds([])}
+            onUpdate={handleUpdateBlock} 
+            onUpdateBlocksBulk={handleUpdateBlocksBulk}
+            onClose={() => setSelectedBlockIds([])}
             isOpen={isRightPanelOpen || mobileTab === 'detail'}
             onToggle={() => setIsRightPanelOpen(!isRightPanelOpen)}
             onDeleteSelected={() => handleDeleteBlocks(selectedBlockIds)}

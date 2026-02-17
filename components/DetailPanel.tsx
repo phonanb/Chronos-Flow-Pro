@@ -10,6 +10,7 @@ interface DetailPanelProps {
   categories: Category[];
   resources: Resource[];
   onUpdate: (block: TimeBlock) => void;
+  onUpdateBlocksBulk: (blocks: TimeBlock[]) => void;
   onClose: () => void;
   isOpen: boolean;
   onToggle: () => void;
@@ -27,7 +28,7 @@ const SectionLabel: React.FC<{ children: React.ReactNode; icon?: React.ElementTy
   </div>
 );
 
-const DetailPanel: React.FC<DetailPanelProps> = ({ blocks, allBlocks, categories, resources, onUpdate, onClose, isOpen, onToggle, onDeleteSelected, onDuplicateSelected, onSaveGroupTemplate }) => {
+const DetailPanel: React.FC<DetailPanelProps> = ({ blocks, allBlocks, categories, resources, onUpdate, onUpdateBlocksBulk, onClose, isOpen, onToggle, onDeleteSelected, onDuplicateSelected, onSaveGroupTemplate }) => {
   const [isGroupSaving, setIsGroupSaving] = useState(false);
   const [groupName, setGroupName] = useState('');
   
@@ -66,41 +67,63 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ blocks, allBlocks, categories
           <button onClick={onClose} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-slate-400 hover:text-red-500 transition-colors"><X size={18} /></button>
         </div>
         <div className="flex-1 p-6 space-y-8 overflow-y-auto custom-scrollbar">
-           <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border dark:border-slate-800 text-center">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                 <Layout size={24} />
+           <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border dark:border-slate-800">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Layout size={24} />
+                </div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-2">{blocks.length} Units Selected</h3>
+                <p className="text-xs text-slate-500 mb-6">Perform bulk operations on all selected items in your system.</p>
               </div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-2">{blocks.length} Units Selected</h3>
-              <p className="text-xs text-slate-500 mb-6">Perform bulk operations on all selected items in your system.</p>
-              
-              <div className="grid grid-cols-1 gap-3">
-                <button onClick={onDuplicateSelected} className="flex items-center justify-center gap-3 w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
-                   <Copy size={16} /> Duplicate Units
-                </button>
 
-                {isGroupSaving ? (
-                  <div className="space-y-2 animate-in slide-in-from-bottom-2">
-                    <input 
-                      className="w-full p-3 text-sm font-bold bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl outline-none ring-2 ring-indigo-500/20" 
-                      placeholder="Group Name..." 
-                      value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <button onClick={() => { if(groupName) { onSaveGroupTemplate(groupName); setIsGroupSaving(false); setGroupName(''); } }} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20">Confirm</button>
-                      <button onClick={() => setIsGroupSaving(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-[10px] uppercase tracking-widest">Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setIsGroupSaving(true)} className="flex items-center justify-center gap-3 w-full py-3.5 bg-amber-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-amber-600 shadow-lg shadow-amber-500/20 transition-all">
-                    <FolderPlus size={16} /> Save as Group
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
+                  <SectionLabel icon={Tags}>Bulk Category Edit</SectionLabel>
+                  <select 
+                    className="w-full p-3 bg-slate-50 dark:bg-slate-900 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-bold appearance-none cursor-pointer"
+                    onChange={(e) => {
+                      const newCatId = e.target.value;
+                      const updatedBlocks = blocks.map(b => ({ ...b, categoryId: newCatId }));
+                      onUpdateBlocksBulk(updatedBlocks);
+                    }}
+                    value=""
+                  >
+                    <option value="" disabled>Change Category for all...</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <button onClick={onDuplicateSelected} className="flex items-center justify-center gap-3 w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all">
+                    <Copy size={16} /> Duplicate Units
                   </button>
-                )}
 
-                <button onClick={onDeleteSelected} className="flex items-center justify-center gap-3 w-full py-3.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900/50">
-                   <Trash2 size={16} /> Delete Units
-                </button>
+                  {isGroupSaving ? (
+                    <div className="space-y-2 animate-in slide-in-from-bottom-2">
+                      <input 
+                        className="w-full p-3 text-sm font-bold bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl outline-none ring-2 ring-indigo-500/20" 
+                        placeholder="Group Name..." 
+                        value={groupName}
+                        onChange={(e) => setGroupName(e.target.value)}
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => { if(groupName) { onSaveGroupTemplate(groupName); setIsGroupSaving(false); setGroupName(''); } }} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20">Confirm</button>
+                        <button onClick={() => setIsGroupSaving(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-[10px] uppercase tracking-widest">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setIsGroupSaving(true)} className="flex items-center justify-center gap-3 w-full py-3.5 bg-amber-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-amber-600 shadow-lg shadow-amber-500/20 transition-all">
+                      <FolderPlus size={16} /> Save as Group
+                    </button>
+                  )}
+
+                  <button onClick={onDeleteSelected} className="flex items-center justify-center gap-3 w-full py-3.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900/50">
+                    <Trash2 size={16} /> Delete Units
+                  </button>
+                </div>
               </div>
            </div>
         </div>
