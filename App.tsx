@@ -4,8 +4,8 @@ import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBre
 import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
-import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X } from 'lucide-react';
+import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES, DAYS_IN_WEEK } from './constants';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X, Sparkles } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [isCenterFullScreen, setIsCenterFullScreen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
   const [isDonateOpen, setIsDonateOpen] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
   
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
@@ -111,6 +112,88 @@ const App: React.FC = () => {
     };
   }, []);
 
+  /**
+   * Local Smart Generation Engine
+   * This mimics AI by analyzing existing block distributions and templates 
+   * to create a coherent 7-day operational plan without external API calls.
+   */
+  const handleAiGenerate = async () => {
+    if (isAiGenerating) return;
+    setIsAiGenerating(true);
+    
+    // Simulate thinking/processing time
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    try {
+      let referenceBlocks = blocks.length > 0 ? [...blocks] : [];
+      
+      // If no blocks exist, use the templates (profiles) to build a basic starting set
+      if (referenceBlocks.length === 0) {
+        let currentTime = 480; // 08:00 AM
+        profiles.forEach((p, i) => {
+          // Fix: Added missing description and prerequisites to match TimeBlock interface
+          referenceBlocks.push({
+            id: `seed-${i}`,
+            title: p.name,
+            description: '',
+            startTime: currentTime,
+            duration: p.defaultDuration,
+            categoryId: p.categoryId,
+            dependencies: i > 0 ? [`seed-${i-1}`] : [],
+            resourceIds: [...p.resourceIds],
+            prerequisites: [],
+            color: p.color,
+            isLocked: false,
+            lane: 0
+          });
+          currentTime += p.defaultDuration + 30; // 30m gap
+        });
+      }
+
+      // Generate the 7-day schedule
+      const newPlan: TimeBlock[] = [];
+      const blocksByDay = referenceBlocks.reduce((acc, b) => {
+        const day = Math.floor(b.startTime / 1440);
+        if (!acc[day]) acc[day] = [];
+        acc[day].push(b);
+        return acc;
+      }, {} as Record<number, TimeBlock[]>);
+
+      // Find the "pattern" of the most populated day or combine them
+      const dayPattern = Object.values(blocksByDay).sort((a, b) => b.length - a.length)[0] || referenceBlocks;
+
+      for (let day = 0; day < DAYS_IN_WEEK; day++) {
+        const dayOffset = day * 1440;
+        const idMap: Record<string, string> = {};
+        
+        // First pass: Generate new IDs for this day's instance
+        dayPattern.forEach(b => {
+          idMap[b.id] = `gen-${day}-${Math.random().toString(36).substr(2, 5)}`;
+        });
+
+        // Second pass: Create blocks for this day
+        dayPattern.forEach(b => {
+          const startTimeInDay = b.startTime % 1440;
+          newPlan.push({
+            ...b,
+            id: idMap[b.id],
+            startTime: dayOffset + startTimeInDay,
+            dependencies: b.dependencies.map(d => idMap[d]).filter(d => !!d),
+            lane: (b.lane + (day % 3)) // Slight lane variation per day to spread the load visually
+          });
+        });
+      }
+
+      setBlocks(newPlan);
+      setTimeout(() => timelineRef.current?.scrollToFirstBlock(), 300);
+    } catch (error) {
+      console.error("Local Generation Error:", error);
+      alert("Smart generation encountered an error. Please check your data.");
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
   const handleShare = () => {
     const stateToShare = { blocks, profiles, categories, resources, lunchRule, eveningRule };
     const jsonStr = JSON.stringify(stateToShare);
@@ -127,11 +210,8 @@ const App: React.FC = () => {
   };
 
   const handleExportPDF = () => {
-    // 1. Scroll to the earliest block so it's visible in the print viewport
     timelineRef.current?.scrollToFirstBlock();
-    // 2. Trigger Fullscreen for clean export
     setIsCenterFullScreen(true);
-    // 3. Small delay to ensure browser rendering is complete
     setTimeout(() => {
       window.print();
       setIsCenterFullScreen(false);
@@ -283,6 +363,8 @@ const App: React.FC = () => {
             onImportCFP={handleImportCFP}
             onExportCSV={() => downloadFile(generateCSV(blocks, categories, resources), 'schedule.csv', 'text/csv')}
             onExportPDF={handleExportPDF}
+            onAiGenerate={handleAiGenerate}
+            isAiGenerating={isAiGenerating}
           />
           {!isMobile && isLeftPanelOpen && !isCenterFullScreen && (
             <div onMouseDown={() => handleResizerStart('left')} className="absolute right-0 top-0 bottom-0 w-1 px-1 cursor-col-resize z-[60] hover:bg-indigo-500/20" />
@@ -291,11 +373,11 @@ const App: React.FC = () => {
 
         <div className={`flex-1 flex flex-col min-w-0 h-full transition-all duration-300 ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
            <div className="flex-1 overflow-hidden relative">
-              {blocks.length === 0 ? (
+              {blocks.length === 0 && !isAiGenerating ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center m-4 bg-white/40 dark:bg-dark-surface/30 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
                   <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-full flex items-center justify-center mb-6"><Plus size={32} /></div>
                   <h3 className="text-xl font-bold mb-2">No active units</h3>
-                  <p className="text-slate-500 text-sm max-w-xs mb-8">Deploy components from the Quick Template library to start.</p>
+                  <p className="text-slate-500 text-sm max-w-xs mb-8">Deploy components from the Quick Template library or use the Smart Generator.</p>
                   <button onClick={() => handleAddBlockFromProfile(profiles[0])} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20">Add First Unit</button>
                 </div>
               ) : (
@@ -310,6 +392,18 @@ const App: React.FC = () => {
                   fontSize={12} zoom={zoom} isFullScreen={isCenterFullScreen} onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
                   onAddBlockAtPosition={handleAddBlockAtPosition}
                 />
+              )}
+              {isAiGenerating && (
+                <div className="absolute inset-0 bg-white/60 dark:bg-dark-bg/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-6 animate-in fade-in duration-300">
+                   <div className="relative">
+                      <div className="w-20 h-20 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin"></div>
+                      <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" size={32} />
+                   </div>
+                   <div className="text-center">
+                      <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest mb-2">Synthesizing 7-Day Plan</h2>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm font-medium animate-pulse">Analyzing reference patterns locally...</p>
+                   </div>
+                </div>
               )}
            </div>
         </div>
@@ -340,7 +434,7 @@ const App: React.FC = () => {
               
               <div className="bg-white p-4 rounded-2xl shadow-inner border dark:border-slate-800">
                  <img 
-                    src="https://img2.pic.in.th/267263.jpg" 
+                    src="267263.jpg" 
                     alt="Thai QR Payment" 
                     className="w-64 h-auto rounded-lg mx-auto filter dark:invert-0"
                  />

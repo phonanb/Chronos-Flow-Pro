@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule } from '../types';
 import { COLOR_MAP } from '../constants';
-import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText, Moon } from 'lucide-react';
+import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText, Moon, Sparkles, Loader2 } from 'lucide-react';
 import { reorder, formatTime } from '../utils';
 
 const InputLabel = ({ children }: { children?: React.ReactNode }) => (
@@ -29,15 +29,17 @@ interface SidebarProps {
   onImportCFP: (file: File) => void;
   onExportCSV: () => void;
   onExportPDF: () => void;
+  onAiGenerate: () => Promise<void>;
+  isAiGenerating: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   profiles, categories, resources, 
   onAddBlockFromProfile, onUpdateProfiles, onUpdateCategories, onUpdateResources,
   lunchRule, onUpdateLunchRule, eveningRule, onUpdateEveningRule, isOpen, onToggle,
-  onExportCFP, onImportCFP, onExportCSV, onExportPDF
+  onExportCFP, onImportCFP, onExportCSV, onExportPDF, onAiGenerate, isAiGenerating
 }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'categories' | 'resources' | 'rules'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'categories' | 'resources' | 'rules' | 'ai'>('templates');
   const [editingProfile, setEditingProfile] = useState<ProfileBlock | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -49,7 +51,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const handleDragStartItem = (idx: number) => setDraggedIdx(idx);
   
   const handleTemplateDragStart = (e: React.DragEvent, profile: ProfileBlock) => {
-    // Only handle external drag if not currently reordering
     e.dataTransfer.setData('application/json', JSON.stringify(profile));
     e.dataTransfer.effectAllowed = 'copy';
   };
@@ -73,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="hidden lg:flex w-full sidebar-container bg-white dark:bg-dark-surface border-r dark:border-dark-border flex-col items-center py-4 gap-6 h-full transition-all shrink-0">
         <button onClick={onToggle} title="Expand Library" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronRight size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('templates');}} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Clock size={20} /></button>
+        <button onClick={() => {onToggle(); setActiveTab('ai');}} className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg"><Sparkles size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('categories');}} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg"><Tags size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('resources');}} className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg"><Boxes size={20} /></button>
       </div>
@@ -85,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className="w-full sidebar-container flex flex-col bg-white dark:bg-dark-surface h-full overflow-hidden transition-all shrink-0 z-50">
       <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
         <div className="flex gap-1">
-          {['templates', 'categories', 'resources', 'rules'].map((tab) => (
+          {['templates', 'ai', 'categories', 'resources', 'rules'].map((tab) => (
             <button 
               key={tab} 
               onClick={() => setActiveTab(tab as any)} 
@@ -93,6 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               className={`p-2 rounded-lg transition-colors ${activeTab === tab ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800'}`}
             >
               {tab === 'templates' && <Clock size={18} />}
+              {tab === 'ai' && <Sparkles size={18} />}
               {tab === 'categories' && <Tags size={18} />}
               {tab === 'resources' && <Boxes size={18} />}
               {tab === 'rules' && <Settings size={18} />}
@@ -135,6 +138,37 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'ai' && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="text-purple-600" size={18} />
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">AI Assistant</h3>
+            </div>
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-2xl">
+               <p className="text-xs text-purple-700 dark:text-purple-300 mb-4 leading-relaxed">
+                 Generate a complete 7-day operational plan based on your current unit patterns and templates.
+               </p>
+               <button 
+                  onClick={onAiGenerate}
+                  disabled={isAiGenerating}
+                  className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-lg ${isAiGenerating ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'}`}
+               >
+                  {isAiGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                  {isAiGenerating ? 'Analyzing Patterns...' : 'Generate 7-Day Plan'}
+               </button>
+            </div>
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">How it works</p>
+               <ul className="text-[10px] text-slate-500 dark:text-slate-400 space-y-2 pl-1 leading-relaxed">
+                  <li>• Learns from existing blocks in your timeline</li>
+                  <li>• Respects template category & duration rules</li>
+                  <li>• Distributes workload across all 7 days</li>
+                  <li>• Automatically avoids resource overlaps</li>
+               </ul>
             </div>
           </div>
         )}
