@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { TimeBlock, Category, Resource } from '../types';
-import { Link, CheckCircle2, X, ArrowDown, ChevronRight, ChevronLeft, Boxes, Clock, Layout, Hash } from 'lucide-react';
+import { Link, CheckCircle2, X, ArrowDown, ChevronRight, ChevronLeft, Boxes, Clock, Layout, Hash, Tags } from 'lucide-react';
 
 interface DetailPanelProps {
   block: TimeBlock | null;
@@ -67,6 +67,19 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ block, allBlocks, categories,
           <div className="space-y-4">
              <div>
                 <input className="w-full text-base font-bold p-3 bg-slate-50 dark:bg-slate-900 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100" placeholder="System Unit Name" value={block.title} onChange={(e) => onUpdate({ ...block, title: e.target.value })} />
+             </div>
+
+             <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border dark:border-slate-700">
+                <SectionLabel icon={Tags}>Category Assignment</SectionLabel>
+                <select 
+                  className="w-full bg-transparent text-sm font-bold outline-none text-slate-800 dark:text-slate-100 appearance-none cursor-pointer" 
+                  value={block.categoryId} 
+                  onChange={(e) => onUpdate({ ...block, categoryId: e.target.value })}
+                >
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id} className="dark:bg-slate-900">{cat.name}</option>
+                  ))}
+                </select>
              </div>
              
              <div className="grid grid-cols-2 gap-3">
