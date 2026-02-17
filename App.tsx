@@ -47,16 +47,18 @@ const App: React.FC = () => {
   const [rightWidth, setRightWidth] = useState(() => loadState('cfp_rightWidth', 320));
 
   const timelineRef = useRef<TimelineRef>(null);
+  const hasInitialScrolled = useRef(false);
 
   // Requirement: Auto-scroll to first box on mount
   useEffect(() => {
-    if (blocks.length > 0) {
+    if (blocks.length > 0 && !hasInitialScrolled.current) {
       const timer = setTimeout(() => {
         timelineRef.current?.scrollToFirstBlock();
-      }, 800);
+        hasInitialScrolled.current = true;
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [blocks.length]);
 
   // Persistence
   useEffect(() => {
@@ -78,7 +80,7 @@ const App: React.FC = () => {
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
-  // Requirement: DEL Keyboard to delete box
+  // Requirement: DEL Keyboard to delete box + Undo/Redo shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -198,7 +200,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Requirement: Share button should shorten link BEFORE copy to clipboard
   const handleShare = async () => {
     if (isShortening) return;
     setIsShortening(true);
@@ -209,10 +210,9 @@ const App: React.FC = () => {
       
       let finalUrl = longUrl;
       
-      // Attempt to shorten via is.gd
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for shortener
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
         
         const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
           signal: controller.signal
@@ -229,7 +229,6 @@ const App: React.FC = () => {
         console.warn("URL shortening failed or timed out, using long URL instead.");
       }
 
-      // Requirement satisfied: Shortening is done BEFORE writing to clipboard
       await navigator.clipboard.writeText(finalUrl);
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
@@ -245,10 +244,10 @@ const App: React.FC = () => {
   const handleExportPDF = () => {
     if (timelineRef.current) {
       timelineRef.current.scrollToFirstBlock();
-      // Small delay to let the UI settle before standard browser print dialog opens
+      // Wait for scroll animation and rendering to stabilize
       setTimeout(() => {
         window.print();
-      }, 700);
+      }, 1000);
     }
   };
 
@@ -312,8 +311,8 @@ const App: React.FC = () => {
              )}
 
              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border dark:border-slate-700">
-                <button onClick={handleUndo} disabled={undoStack.length === 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 disabled:opacity-25 transition-all"><Undo2 size={16} /></button>
-                <button onClick={handleRedo} disabled={redoStack.length === 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 disabled:opacity-25 transition-all"><Redo2 size={16} /></button>
+                <button onClick={handleUndo} disabled={undoStack.length === 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 disabled:opacity-25 transition-all" title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
+                <button onClick={handleRedo} disabled={redoStack.length === 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 disabled:opacity-25 transition-all" title="Redo (Ctrl+Y)"><Redo2 size={16} /></button>
              </div>
 
              <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
