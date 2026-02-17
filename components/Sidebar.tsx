@@ -1,8 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot } from '../types';
+import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule } from '../types';
 import { COLOR_MAP } from '../constants';
-import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText, Moon, Sparkles, Loader2, History, RotateCcw, Save, Archive, Target } from 'lucide-react';
+import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText, Moon, Sparkles, Loader2 } from 'lucide-react';
 import { reorder, formatTime } from '../utils';
 
 const InputLabel = ({ children }: { children?: React.ReactNode }) => (
@@ -31,20 +31,15 @@ interface SidebarProps {
   onExportPDF: () => void;
   onAiGenerate: () => Promise<void>;
   isAiGenerating: boolean;
-  history: Snapshot[];
-  onTakeSnapshot: (name?: string) => void;
-  onRestoreSnapshot: (snapshot: Snapshot) => void;
-  onDeleteSnapshot: (id: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   profiles, categories, resources, 
   onAddBlockFromProfile, onUpdateProfiles, onUpdateCategories, onUpdateResources,
   lunchRule, onUpdateLunchRule, eveningRule, onUpdateEveningRule, isOpen, onToggle,
-  onExportCFP, onImportCFP, onExportCSV, onExportPDF, onAiGenerate, isAiGenerating,
-  history, onTakeSnapshot, onRestoreSnapshot, onDeleteSnapshot
+  onExportCFP, onImportCFP, onExportCSV, onExportPDF, onAiGenerate, isAiGenerating
 }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'ai' | 'categories' | 'resources' | 'history' | 'rules'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'categories' | 'resources' | 'rules' | 'ai'>('templates');
   const [editingProfile, setEditingProfile] = useState<ProfileBlock | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -76,30 +71,30 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   if (!isOpen && !isMobile) {
     return (
-      <div className="hidden lg:flex w-full sidebar-container bg-white dark:bg-dark-surface border-r dark:border-dark-border flex-col items-center py-6 gap-8 h-full transition-all shrink-0">
-        <button onClick={onToggle} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500"><ChevronRight size={20} /></button>
-        <button onClick={() => {onToggle(); setActiveTab('templates');}} className="p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl"><Clock size={20} /></button>
-        <button onClick={() => {onToggle(); setActiveTab('history');}} className="p-2 text-slate-500 hover:text-indigo-600 rounded-xl"><History size={20} /></button>
-        <button onClick={() => {onToggle(); setActiveTab('ai');}} className="p-2 text-slate-500 hover:text-purple-600 rounded-xl"><Sparkles size={20} /></button>
-        <button onClick={() => {onToggle(); setActiveTab('rules');}} className="p-2 text-slate-500 hover:text-amber-600 rounded-xl"><Settings size={20} /></button>
+      <div className="hidden lg:flex w-full sidebar-container bg-white dark:bg-dark-surface border-r dark:border-dark-border flex-col items-center py-4 gap-6 h-full transition-all shrink-0">
+        <button onClick={onToggle} title="Expand Library" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronRight size={20} /></button>
+        <button onClick={() => {onToggle(); setActiveTab('templates');}} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Clock size={20} /></button>
+        <button onClick={() => {onToggle(); setActiveTab('ai');}} className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg"><Sparkles size={20} /></button>
+        <button onClick={() => {onToggle(); setActiveTab('categories');}} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg"><Tags size={20} /></button>
+        <button onClick={() => {onToggle(); setActiveTab('resources');}} className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg"><Boxes size={20} /></button>
       </div>
     );
   }
 
-  const inputClasses = "w-full text-sm font-medium p-3 bg-slate-50 dark:bg-slate-900 border border-transparent focus:border-indigo-500 dark:border-slate-800 rounded-xl outline-none transition-all text-slate-800 dark:text-slate-100 shadow-sm";
+  const inputClasses = "w-full text-sm p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-slate-200";
 
   return (
-    <div className="w-full sidebar-container flex flex-col bg-white dark:bg-dark-surface h-full overflow-hidden transition-all shrink-0 z-50 shadow-2xl">
+    <div className="w-full sidebar-container flex flex-col bg-white dark:bg-dark-surface h-full overflow-hidden transition-all shrink-0 z-50">
       <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
-        <div className="flex gap-2">
-          {['templates', 'history', 'ai', 'categories', 'resources', 'rules'].map((tab) => (
+        <div className="flex gap-1">
+          {['templates', 'ai', 'categories', 'resources', 'rules'].map((tab) => (
             <button 
               key={tab} 
               onClick={() => setActiveTab(tab as any)} 
-              className={`p-2.5 rounded-xl transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              title={`Switch to ${tab}`}
+              className={`p-2 rounded-lg transition-colors ${activeTab === tab ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800'}`}
             >
               {tab === 'templates' && <Clock size={18} />}
-              {tab === 'history' && <History size={18} />}
               {tab === 'ai' && <Sparkles size={18} />}
               {tab === 'categories' && <Tags size={18} />}
               {tab === 'resources' && <Boxes size={18} />}
@@ -107,66 +102,39 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           ))}
         </div>
-        {!isMobile && <button onClick={onToggle} className="p-2.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-500"><ChevronLeft size={18} /></button>}
+        {!isMobile && <button onClick={onToggle} title="Collapse Library" className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronLeft size={18} /></button>}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 lg:p-6 custom-scrollbar space-y-8">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         {activeTab === 'templates' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-xs uppercase tracking-widest">Component Library</h3>
-              <button onClick={() => setEditingProfile({ id: Math.random().toString(36).substr(2, 9), name: '', categoryId: categories[0]?.id || '', defaultDuration: 60, color: 'blue', resourceIds: [] })} className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl hover:scale-110 transition-transform"><Plus size={16} /></button>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Quick Templates</h3>
+              <button onClick={() => setEditingProfile({ id: Math.random().toString(36).substr(2, 9), name: '', categoryId: categories[0]?.id || '', defaultDuration: 60, color: 'blue', resourceIds: [] })} title="Create Template" className="p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded"><Plus size={16} /></button>
             </div>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-2">
               {profiles.map((p, idx) => (
-                <div key={p.id} draggable onDragStart={(e) => { handleDragStartItem(idx); handleTemplateDragStart(e, p); }} onDragOver={(e) => handleDragOverItem(e, idx)} className="group relative">
-                  <div className="absolute -left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"><GripVertical size={14} /></div>
-                  <button onClick={() => onAddBlockFromProfile(p)} className="w-full text-left p-4 rounded-2xl border dark:border-slate-800 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 bg-white dark:bg-slate-900/50 shadow-sm transition-all flex items-center gap-4 active:scale-[0.98]">
-                    <div className={`w-3 h-10 rounded-full ${COLOR_MAP[categories.find(c => c.id === p.categoryId)?.color || 'slate']?.split(' ')[0]}`}></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-black text-slate-800 dark:text-slate-100 truncate uppercase tracking-tighter">{p.name || 'Untitled Template'}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{p.defaultDuration}m • {categories.find(c => c.id === p.categoryId)?.name}</p>
+                <div 
+                  key={p.id} 
+                  draggable 
+                  onDragStart={(e) => {
+                    handleDragStartItem(idx);
+                    handleTemplateDragStart(e, p);
+                  }} 
+                  onDragOver={(e) => handleDragOverItem(e, idx)} 
+                  className="group relative"
+                >
+                  <button onClick={() => onAddBlockFromProfile(p)} className="w-full text-left p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all flex items-center gap-3">
+                    <div className={`w-1.5 h-6 rounded-full ${COLOR_MAP[categories.find(c => c.id === p.categoryId)?.color || 'slate']?.split(' ')[0]}`}></div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{p.name || 'Untitled'}</p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500">{p.defaultDuration}m • {categories.find(c => c.id === p.categoryId)?.name}</p>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity no-print">
-                       <button onClick={(e) => { e.stopPropagation(); setEditingProfile(p); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg"><Edit3 size={14} /></button>
-                       <button onClick={(e) => { e.stopPropagation(); onUpdateProfiles(profiles.filter(op => op.id !== p.id)); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={14} /></button>
-                    </div>
+                    <GripVertical size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing hidden lg:block" />
                   </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="font-black text-slate-800 dark:text-slate-100 text-xs uppercase tracking-widest">Checkpoints</h3>
-              <button onClick={() => onTakeSnapshot()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all">
-                <Target size={14} /> Milestone
-              </button>
-            </div>
-            <div className="space-y-3">
-              {history.length === 0 ? (
-                <div className="py-12 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed dark:border-slate-800 rounded-[32px] gap-4">
-                  <Archive size={32} strokeWidth={1} />
-                  <p className="text-[10px] uppercase font-black tracking-widest">Timeline is empty</p>
-                </div>
-              ) : history.map((s) => (
-                <div key={s.id} className="p-4 bg-white dark:bg-slate-900/50 border dark:border-slate-800 rounded-2xl group hover:border-indigo-500/30 transition-all shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-2 h-2 rounded-full ${s.name.includes('Archive') ? 'bg-slate-400' : 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]'}`}></div>
-                      <span className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{s.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => onRestoreSnapshot(s)} className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg" title="Restore this version"><RotateCcw size={14} /></button>
-                      <button onClick={() => onDeleteSnapshot(s.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                    <span>{new Date(s.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {s.blocks.length} Items</span>
-                    <span className="text-[9px] font-mono opacity-60">ID:{s.id.slice(0,4)}</span>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 bg-white/95 dark:bg-slate-900/95 p-1 rounded shadow-sm border dark:border-slate-700 transition-opacity">
+                     <button onClick={(e) => { e.stopPropagation(); setEditingProfile(p); }} className="p-1 text-slate-500 hover:text-indigo-600"><Edit3 size={12} /></button>
+                     <button onClick={(e) => { e.stopPropagation(); onUpdateProfiles(profiles.filter(op => op.id !== p.id)); }} className="p-1 text-slate-500 hover:text-red-600"><Trash2 size={12} /></button>
                   </div>
                 </div>
               ))}
@@ -176,43 +144,174 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {activeTab === 'ai' && (
           <div className="space-y-6">
-            <div className="p-6 bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-100 dark:border-purple-800 rounded-[32px] text-center">
-               <div className="w-12 h-12 bg-purple-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-purple-500/20"><Sparkles size={24} /></div>
-               <h3 className="font-black text-purple-900 dark:text-purple-200 text-sm uppercase tracking-widest mb-2">Chronos AI Planner</h3>
-               <p className="text-[11px] text-purple-700 dark:text-purple-400 font-medium leading-relaxed mb-6">Let Gemini synthesize your production templates into a conflict-free 7-day operational plan.</p>
-               <button onClick={onAiGenerate} disabled={isAiGenerating} className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl ${isAiGenerating ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-500/30'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="text-purple-600" size={18} />
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">AI Assistant</h3>
+            </div>
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-2xl">
+               <p className="text-xs text-purple-700 dark:text-purple-300 mb-4 leading-relaxed">
+                 Generate a complete 7-day operational plan based on your current unit patterns and templates.
+               </p>
+               <button 
+                  onClick={onAiGenerate}
+                  disabled={isAiGenerating}
+                  className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-lg ${isAiGenerating ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'}`}
+               >
                   {isAiGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-                  {isAiGenerating ? 'Synthesizing' : 'Generate Flow'}
+                  {isAiGenerating ? 'Analyzing Patterns...' : 'Generate 7-Day Plan'}
                </button>
+            </div>
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">How it works</p>
+               <ul className="text-[10px] text-slate-500 dark:text-slate-400 space-y-2 pl-1 leading-relaxed">
+                  <li>• Learns from existing blocks in your timeline</li>
+                  <li>• Respects template category & duration rules</li>
+                  <li>• Distributes workload across all 7 days</li>
+                  <li>• Automatically avoids resource overlaps</li>
+               </ul>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'categories' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Categories</h3>
+              <button onClick={() => setEditingCategory({ id: Math.random().toString(36).substr(2, 9), name: '', color: 'blue' })} title="Add Category" className="p-1 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded"><Plus size={16} /></button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {categories.map((c, idx) => (
+                <div 
+                  key={c.id} 
+                  draggable 
+                  onDragStart={() => handleDragStartItem(idx)} 
+                  onDragOver={(e) => handleDragOverItem(e, idx)} 
+                  className="flex items-center justify-between p-2.5 border dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${COLOR_MAP[c.color]?.split(' ')[0]}`}></div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{c.name}</span>
+                  </div>
+                  <div className="flex gap-1 items-center">
+                    <button onClick={() => setEditingCategory(c)} className="p-1 text-slate-400 hover:text-emerald-600"><Edit3 size={12} /></button>
+                    <button onClick={() => onUpdateCategories(categories.filter(oc => oc.id !== c.id))} className="p-1 text-slate-400 hover:text-red-600"><Trash2 size={12} /></button>
+                    <GripVertical size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 cursor-grab hidden lg:block" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'resources' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Equipment Pool</h3>
+              <button onClick={() => setEditingResource({ id: Math.random().toString(36).substr(2, 9), name: '', description: '' })} title="Register Equipment" className="p-1 hover:bg-amber-50 dark:hover:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded"><Plus size={16} /></button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {resources.map((r, idx) => (
+                <div 
+                  key={r.id} 
+                  draggable 
+                  onDragStart={() => handleDragStartItem(idx)} 
+                  onDragOver={(e) => handleDragOverItem(e, idx)} 
+                  className="p-2.5 border dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 group relative"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                     <div className="flex items-center gap-2">
+                       <Boxes size={12} className="text-amber-500" />
+                       <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{r.name}</span>
+                     </div>
+                     <div className="flex gap-1 items-center">
+                       <button onClick={() => setEditingResource(r)} className="p-1 text-slate-400 hover:text-amber-600"><Edit3 size={12} /></button>
+                       <button onClick={() => onUpdateResources(resources.filter(or => or.id !== r.id))} className="p-1 text-slate-400 hover:text-red-600"><Trash2 size={12} /></button>
+                       <GripVertical size={14} className="text-slate-300 cursor-grab hidden lg:block" />
+                     </div>
+                  </div>
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 truncate">{r.description || 'No notes'}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
         {activeTab === 'rules' && (
-          <div className="space-y-8">
-             <div className="p-5 bg-slate-50 dark:bg-slate-900 border dark:border-slate-800 rounded-3xl space-y-4">
-                <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-3"><div className="p-2 bg-amber-100 dark:bg-amber-900/20 text-amber-600 rounded-lg"><Coffee size={16} /></div><label className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">Staff Breaks</label></div>
-                   <input type="checkbox" checked={lunchRule.enabled} onChange={(e) => onUpdateLunchRule({ ...lunchRule, enabled: e.target.checked })} className="w-5 h-5 rounded-lg border-2 border-slate-300 dark:border-slate-700 text-indigo-600 transition-all" />
+          <div className="space-y-6">
+             <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                   <div className="flex items-center gap-2"><Coffee size={14} className="text-amber-600" /><label className="text-xs font-bold text-slate-600 dark:text-slate-300">Lunch Break</label></div>
+                   <input type="checkbox" checked={lunchRule.enabled} onChange={(e) => onUpdateLunchRule({ ...lunchRule, enabled: e.target.checked })} className="w-4 h-4 rounded bg-white dark:bg-slate-900 border dark:border-slate-700 text-indigo-600" />
                 </div>
                 {lunchRule.enabled && (
-                  <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                     <div className="space-y-1"><InputLabel>Shift Start</InputLabel><input type="number" step="15" className={inputClasses} value={lunchRule.startTime} onChange={(e) => onUpdateLunchRule({...lunchRule, startTime: parseInt(e.target.value)})}/></div>
-                     <div className="space-y-1"><InputLabel>Shift End</InputLabel><input type="number" step="15" className={inputClasses} value={lunchRule.endTime} onChange={(e) => onUpdateLunchRule({...lunchRule, endTime: parseInt(e.target.value)})}/></div>
+                  <div className="space-y-3 mt-4">
+                     <div>
+                       <InputLabel>Start Time</InputLabel>
+                       <div className="flex items-center gap-3">
+                         <input type="number" step="15" className={inputClasses} value={lunchRule.startTime} onChange={(e) => onUpdateLunchRule({...lunchRule, startTime: parseInt(e.target.value)})}/>
+                         <span className="text-[9px] whitespace-nowrap text-slate-400">{formatTime(lunchRule.startTime)}</span>
+                       </div>
+                     </div>
+                     <div>
+                       <InputLabel>End Time</InputLabel>
+                       <div className="flex items-center gap-3">
+                         <input type="number" step="15" className={inputClasses} value={lunchRule.endTime} onChange={(e) => onUpdateLunchRule({...lunchRule, endTime: parseInt(e.target.value)})}/>
+                         <span className="text-[9px] whitespace-nowrap text-slate-400">{formatTime(lunchRule.endTime)}</span>
+                       </div>
+                     </div>
                   </div>
                 )}
              </div>
 
-             <div className="space-y-4">
-                <h3 className="font-black text-slate-800 dark:text-slate-100 text-xs uppercase tracking-widest px-1">Infrastructure</h3>
-                <div className="grid grid-cols-2 gap-3">
-                   <button onClick={onExportCFP} className="flex flex-col items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 hover:scale-105 transition-all"><Download size={20} /><span className="text-[10px] font-black uppercase">CFP Save</span></button>
-                   <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900 text-slate-500 rounded-2xl border border-slate-200 dark:border-slate-800 hover:scale-105 transition-all"><Upload size={20} /><span className="text-[10px] font-black uppercase">Load</span></button>
-                   <input type="file" ref={fileInputRef} className="hidden" accept=".cfp" onChange={(e) => e.target.files && onImportCFP(e.target.files[0])}/>
+             <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                   <div className="flex items-center gap-2"><Moon size={14} className="text-indigo-600" /><label className="text-xs font-bold text-slate-600 dark:text-slate-300">Evening Break</label></div>
+                   <input type="checkbox" checked={eveningRule.enabled} onChange={(e) => onUpdateEveningRule({ ...eveningRule, enabled: e.target.checked })} className="w-4 h-4 rounded bg-white dark:bg-slate-900 border dark:border-slate-700 text-indigo-600" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                   <button onClick={onExportCSV} className="flex items-center justify-center gap-2 p-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 font-black text-[10px] uppercase tracking-widest"><FileText size={16} /> CSV</button>
-                   <button onClick={onExportPDF} className="flex items-center justify-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-100 dark:border-red-900/30 font-black text-[10px] uppercase tracking-widest"><FileText size={16} /> Print</button>
+                {eveningRule.enabled && (
+                  <div className="space-y-3 mt-4">
+                     <div>
+                       <InputLabel>Start Time</InputLabel>
+                       <div className="flex items-center gap-3">
+                         <input type="number" step="15" className={inputClasses} value={eveningRule.startTime} onChange={(e) => onUpdateEveningRule({...eveningRule, startTime: parseInt(e.target.value)})}/>
+                         <span className="text-[9px] whitespace-nowrap text-slate-400">{formatTime(eveningRule.startTime)}</span>
+                       </div>
+                     </div>
+                     <div>
+                       <InputLabel>End Time</InputLabel>
+                       <div className="flex items-center gap-3">
+                         <input type="number" step="15" className={inputClasses} value={eveningRule.endTime} onChange={(e) => onUpdateEveningRule({...eveningRule, endTime: parseInt(e.target.value)})}/>
+                         <span className="text-[9px] whitespace-nowrap text-slate-400">{formatTime(eveningRule.endTime)}</span>
+                       </div>
+                     </div>
+                  </div>
+                )}
+             </div>
+
+             <div className="space-y-3">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Project Management</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+                   <button onClick={onExportCFP} className="flex items-center justify-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 transition-colors">
+                     <Download size={14} /> Export .CFP
+                   </button>
+                   <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 transition-colors">
+                     <Upload size={14} /> Import .CFP
+                   </button>
+                   <input 
+                     type="file" 
+                     ref={fileInputRef} 
+                     className="hidden" 
+                     accept=".cfp" 
+                     onChange={(e) => e.target.files && onImportCFP(e.target.files[0])}
+                   />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+                   <button onClick={onExportCSV} className="flex items-center justify-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold border border-emerald-100 dark:border-emerald-900/50 hover:bg-emerald-100 transition-colors">
+                     <FileText size={14} /> CSV Report
+                   </button>
+                   <button onClick={onExportPDF} className="flex items-center justify-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-xs font-bold border border-red-100 dark:border-red-900/50 hover:bg-red-100 transition-colors">
+                     <FileText size={14} /> Print PDF
+                   </button>
                 </div>
              </div>
           </div>
@@ -220,19 +319,91 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {editingProfile && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setEditingProfile(null)}>
-          <div className="bg-white dark:bg-dark-surface rounded-[40px] shadow-2xl w-full max-w-sm p-8 space-y-6 relative border dark:border-dark-border" onClick={e => e.stopPropagation()}>
-             <button onClick={() => setEditingProfile(null)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-red-500 rounded-xl transition-colors"><X size={20} /></button>
-             <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">Logic Template</h3>
-             <div className="space-y-5">
-                <div><InputLabel>Process Name</InputLabel><input className={inputClasses} value={editingProfile.name} onChange={e => setEditingProfile({...editingProfile, name: e.target.value})} placeholder="e.g., Autoclave Cycle A" /></div>
-                <div className="flex gap-4">
-                   <div className="flex-1"><InputLabel>Category</InputLabel><select className={inputClasses} value={editingProfile.categoryId} onChange={e => setEditingProfile({...editingProfile, categoryId: e.target.value})}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                   <div className="w-24"><InputLabel>Duration (m)</InputLabel><input type="number" className={inputClasses} value={editingProfile.defaultDuration} onChange={e => setEditingProfile({...editingProfile, defaultDuration: parseInt(e.target.value)})}/></div>
-                </div>
-                <div><InputLabel>Equipment Lock</InputLabel><div className="max-h-40 overflow-y-auto custom-scrollbar p-3 bg-slate-50 dark:bg-slate-900 rounded-2xl space-y-2">{resources.map(r => (<label key={r.id} className="flex items-center gap-3 text-xs font-bold p-2.5 cursor-pointer hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-colors"><input type="checkbox" checked={editingProfile.resourceIds.includes(r.id)} onChange={e => { const ids = e.target.checked ? [...editingProfile.resourceIds, r.id] : editingProfile.resourceIds.filter(id => id !== r.id); setEditingProfile({...editingProfile, resourceIds: ids}); }} className="w-4 h-4 rounded text-indigo-600" /><span className="text-slate-700 dark:text-slate-200">{r.name}</span></label>))}</div></div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingProfile(null)}>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 border dark:border-slate-700" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100">Template Setup</h3>
+                <button onClick={() => setEditingProfile(null)}><X size={18} className="text-slate-400" /></button>
              </div>
-             <button onClick={() => { onUpdateProfiles(profiles.find(p => p.id === editingProfile.id) ? profiles.map(p => p.id === editingProfile.id ? editingProfile : p) : [...profiles, editingProfile]); setEditingProfile(null); }} className="w-full py-4 font-black text-white bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all text-xs uppercase tracking-widest">Apply Configuration</button>
+             
+             <div>
+                <InputLabel>Title</InputLabel>
+                <input className={inputClasses} value={editingProfile.name} onChange={e => setEditingProfile({...editingProfile, name: e.target.value})} />
+             </div>
+
+             <div className="flex gap-4">
+                <div className="flex-1">
+                   <InputLabel>Category</InputLabel>
+                   <select className={inputClasses} value={editingProfile.categoryId} onChange={e => setEditingProfile({...editingProfile, categoryId: e.target.value})}>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                   </select>
+                </div>
+                <div className="w-24">
+                   <InputLabel>Min</InputLabel>
+                   <input type="number" className={inputClasses} value={editingProfile.defaultDuration} onChange={e => setEditingProfile({...editingProfile, defaultDuration: parseInt(e.target.value)})}/>
+                </div>
+             </div>
+
+             <div>
+                <InputLabel>Resources</InputLabel>
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1 p-1 border dark:border-slate-800 rounded-lg">
+                   {resources.map(r => (
+                     <label key={r.id} className="flex items-center gap-2 text-xs p-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded">
+                        <input type="checkbox" checked={editingProfile.resourceIds.includes(r.id)} onChange={e => {
+                          const ids = e.target.checked ? [...editingProfile.resourceIds, r.id] : editingProfile.resourceIds.filter(id => id !== r.id);
+                          setEditingProfile({...editingProfile, resourceIds: ids});
+                        }} className="rounded" />
+                        <span className="text-slate-700 dark:text-slate-300">{r.name}</span>
+                     </label>
+                   ))}
+                </div>
+             </div>
+
+             <button onClick={() => {
+                onUpdateProfiles(profiles.find(p => p.id === editingProfile.id) ? profiles.map(p => p.id === editingProfile.id ? editingProfile : p) : [...profiles, editingProfile]);
+                setEditingProfile(null);
+             }} className="w-full py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Apply Changes</button>
+          </div>
+        </div>
+      )}
+
+      {editingCategory && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingCategory(null)}>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 border dark:border-slate-700" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-slate-100">Category Config</h3><button onClick={() => setEditingCategory(null)}><X size={18} /></button></div>
+             <div>
+                <InputLabel>Name</InputLabel>
+                <input className={inputClasses} value={editingCategory.name} onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} />
+             </div>
+             <div className="flex flex-wrap gap-2">
+                {Object.keys(COLOR_MAP).map(color => (
+                  <button key={color} onClick={() => setEditingCategory({...editingCategory, color})} className={`w-8 h-8 rounded-full border-2 ${COLOR_MAP[color].split(' ')[0]} ${editingCategory.color === color ? 'border-indigo-600' : 'border-transparent'}`} />
+                ))}
+             </div>
+             <button onClick={() => {
+               onUpdateCategories(categories.find(c => c.id === editingCategory.id) ? categories.map(c => c.id === editingCategory.id ? editingCategory : c) : [...categories, editingCategory]);
+               setEditingCategory(null);
+             }} className="w-full py-3 text-sm font-bold text-white bg-emerald-600 rounded-xl">Update</button>
+          </div>
+        </div>
+      )}
+
+      {editingResource && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingResource(null)}>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 border dark:border-slate-700" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-slate-100">Resource Config</h3><button onClick={() => setEditingResource(null)}><X size={18} /></button></div>
+             <div>
+                <InputLabel>Name</InputLabel>
+                <input className={inputClasses} value={editingResource.name} onChange={e => setEditingResource({...editingResource, name: e.target.value})} />
+             </div>
+             <div>
+                <InputLabel>Notes</InputLabel>
+                <textarea className={`${inputClasses} h-20`} value={editingResource.description} onChange={e => setEditingResource({...editingResource, description: e.target.value})} />
+             </div>
+             <button onClick={() => {
+               onUpdateResources(resources.find(r => r.id === editingResource.id) ? resources.map(r => r.id === editingResource.id ? editingResource : r) : [...resources, editingResource]);
+               setEditingResource(null);
+             }} className="w-full py-3 text-sm font-bold text-white bg-amber-600 rounded-xl">Save</button>
           </div>
         </div>
       )}

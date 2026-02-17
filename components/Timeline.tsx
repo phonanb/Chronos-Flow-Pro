@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback, useImperative
 import { TimeBlock, LunchBreakRule, EveningBreakRule, Category, ProfileBlock } from '../types';
 import { START_HOUR, END_HOUR, DAYS_IN_WEEK, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
-import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon, MousePointer2, ArrowRight } from 'lucide-react';
+import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon, MousePointer2 } from 'lucide-react';
 
 export interface TimelineRef {
   scrollToFirstBlock: () => void;
@@ -198,62 +198,48 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   };
 
   const resourceConflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);
+
+  const renderArrows = () => (
+    <svg className="absolute inset-0 pointer-events-none overflow-visible z-10 no-print">
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+        </marker>
+      </defs>
+      {blocks.map(block => block.dependencies.map(depId => {
+        const dep = blocks.find(b => b.id === depId);
+        if (!dep) return null;
+
+        const depTimePos = dep.startTime * currentPPM;
+        const depSize = dep.duration * currentPPM;
+        const blockTimePos = block.startTime * currentPPM;
+        const depLanePos = HEADER_HEIGHT + (dep.lane * laneSize);
+        const blockLanePos = HEADER_HEIGHT + (block.lane * laneSize);
+
+        const xStart = depTimePos + depSize;
+        const yStart = depLanePos + (laneSize / 2);
+        const xEnd = blockTimePos;
+        const yEnd = blockLanePos + (laneSize / 2);
+
+        const pathData = `M ${xStart} ${yStart} C ${xStart + (40 * zoom)} ${yStart}, ${xEnd - (40 * zoom)} ${yEnd}, ${xEnd} ${yEnd}`;
+        const isViolation = dep.startTime + dep.duration > block.startTime;
+
+        return (
+          <path key={`${depId}-${block.id}`} d={pathData} fill="none" 
+            stroke={isViolation ? "#f87171" : "#94a3b8"} 
+            strokeWidth={1.5 * zoom} 
+            markerEnd="url(#arrowhead)" 
+            strokeDasharray={isViolation ? "4" : "0"}
+            className={isViolation ? "animate-pulse" : "opacity-40"}
+          />
+        );
+      }))}
+    </svg>
+  );
+
   const contentWidth = DAYS_IN_WEEK * 24 * 60 * currentPPM + (400 * zoom);
   const contentHeight = (Math.max(getMaxLane(blocks), 10) + 5) * laneSize + (400 * zoom);
   const gridHourWidth = 60 * currentPPM;
-
-  /**
-   * Generates SVG path data for dependency arrows
-   */
-  const dependencyPaths = useMemo(() => {
-    // Fix: Use React.JSX.Element to avoid "Cannot find namespace 'JSX'" error
-    const paths: React.JSX.Element[] = [];
-    
-    blocks.forEach(succ => {
-      if (!succ.dependencies || succ.dependencies.length === 0) return;
-      
-      succ.dependencies.forEach(predId => {
-        const pred = blocks.find(b => b.id === predId);
-        if (!pred) return;
-
-        // Pred center-right
-        const x1 = (pred.startTime + pred.duration) * currentPPM;
-        const y1 = HEADER_HEIGHT + (pred.lane * laneSize) + ((laneSize - (16 * zoom)) / 2);
-        
-        // Succ center-left
-        const x2 = succ.startTime * currentPPM;
-        const y2 = HEADER_HEIGHT + (succ.lane * laneSize) + ((laneSize - (16 * zoom)) / 2);
-
-        const isHighlighted = selectedBlockIds.includes(succ.id) || selectedBlockIds.includes(pred.id);
-        const isBackwards = x1 > x2;
-        
-        // Elbow logic
-        let d = '';
-        if (!isBackwards) {
-          const midX = x1 + (x2 - x1) / 2;
-          d = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
-        } else {
-          // Backward link (violation)
-          const offset = 20 * zoom;
-          d = `M ${x1} ${y1} L ${x1 + offset} ${y1} L ${x1 + offset} ${y1 + offset} L ${x2 - offset} ${y1 + offset} L ${x2 - offset} ${y2} L ${x2} ${y2}`;
-        }
-
-        paths.push(
-          <path 
-            key={`${predId}-${succ.id}`}
-            d={d}
-            fill="none"
-            stroke={isHighlighted ? '#6366f1' : 'rgba(148, 163, 184, 0.4)'}
-            strokeWidth={isHighlighted ? 3 : 2}
-            markerEnd={`url(#arrowhead-${isHighlighted ? 'active' : 'idle'})`}
-            className="transition-colors duration-200"
-          />
-        );
-      });
-    });
-    
-    return paths;
-  }, [blocks, currentPPM, laneSize, zoom, selectedBlockIds]);
 
   return (
     <div className={`h-full flex flex-col bg-white dark:bg-dark-surface overflow-hidden timeline-container ${isFullScreen ? 'fixed inset-0 z-[100]' : ''}`}>
@@ -262,13 +248,13 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg"><LayoutGrid size={16} /></div>
            <div>
               <h2 className="text-[10px] lg:text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-[0.2em]">7-Day Operational Timeline</h2>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Selection mode active</p>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Global Manufacturing Schedule</p>
            </div>
         </div>
         <div className="flex items-center gap-2 lg:gap-4">
            {selectedBlockIds.length > 0 && (
              <div className="flex items-center gap-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-indigo-100 dark:border-indigo-900/40 uppercase tracking-widest">
-               <MousePointer2 size={12} /> {selectedBlockIds.length} Items Selected
+               <MousePointer2 size={12} /> {selectedBlockIds.length} Selected
              </div>
            )}
            <button onClick={onToggleFullScreen} className="p-2 lg:p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl text-slate-500 transition-all shadow-sm">
@@ -285,7 +271,11 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       >
         <div 
           ref={contentRef}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) startSelection(e.clientX, e.clientY); }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              startSelection(e.clientX, e.clientY);
+            }
+          }}
           style={{ 
             width: contentWidth, 
             height: contentHeight, 
@@ -297,21 +287,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
           }}
           className="relative"
         >
-          {/* Dependency Arrows Layer */}
-          <svg 
-            className="absolute inset-0 pointer-events-none z-10 no-print" 
-            style={{ width: '100%', height: '100%' }}
-          >
-            <defs>
-              <marker id="arrowhead-idle" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="rgba(148, 163, 184, 0.6)" />
-              </marker>
-              <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" />
-              </marker>
-            </defs>
-            {dependencyPaths}
-          </svg>
+          {renderArrows()}
 
           {selectionRect && (
             <div 
@@ -324,7 +300,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
               }}
             />
           )}
-
+          
           <div className="flex sticky top-0 z-40 bg-white/95 dark:bg-dark-surface/95 border-b dark:border-dark-border">
             {Array.from({ length: DAYS_IN_WEEK }).map((_, day) => (
               <div key={day} className="flex flex-col border-r dark:border-dark-border" style={{ width: 24 * 60 * currentPPM }}>
@@ -360,7 +336,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
                   onMouseDown={(e) => { e.stopPropagation(); startDrag(e.clientX, e.clientY, block, e.shiftKey); }}
                   className={`absolute rounded-xl border-l-[6px] p-2 sm:p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden
                     ${colorClass} 
-                    ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 z-50 scale-[1.01] shadow-xl brightness-110' : 'z-30 hover:shadow-lg'}
+                    ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 z-50 scale-[1.01] shadow-xl' : 'z-30 hover:shadow-lg'}
                     ${hasResourceConflict ? 'border-red-600 ring-2 ring-red-500/20 shadow-lg shadow-red-500/10' : ''}
                     ${block.isLocked ? 'cursor-not-allowed opacity-90' : ''}
                   `}
@@ -387,6 +363,36 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
               );
             })}
           </div>
+
+          {Array.from({ length: DAYS_IN_WEEK }).map((_, day) => (
+            <React.Fragment key={`breaks-${day}`}>
+              {lunchRule.enabled && (
+                <div className="absolute bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 pointer-events-none z-10 border-x h-full top-0"
+                  style={{ 
+                    left: (day * 24 * 60 + lunchRule.startTime) * currentPPM, 
+                    width: (lunchRule.endTime - lunchRule.startTime) * currentPPM 
+                  }}
+                >
+                  <div className="absolute top-24 left-2 flex items-center gap-1.5 opacity-60">
+                    <Coffee size={10} className="text-amber-600" />
+                  </div>
+                </div>
+              )}
+
+              {eveningRule.enabled && (
+                <div className="absolute bg-indigo-500/5 dark:bg-indigo-500/10 border-indigo-500/20 pointer-events-none z-10 border-x h-full top-0"
+                  style={{ 
+                    left: (day * 24 * 60 + eveningRule.startTime) * currentPPM, 
+                    width: (eveningRule.endTime - eveningRule.startTime) * currentPPM 
+                  }}
+                >
+                  <div className="absolute top-24 left-2 flex items-center gap-1.5 opacity-60">
+                    <Moon size={10} className="text-indigo-600" />
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
         </div>
       </div>
     </div>
