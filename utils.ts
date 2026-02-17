@@ -27,7 +27,7 @@ export const findResourceConflicts = (blocks: TimeBlock[]) => {
       const start2 = b2.startTime;
       const end2 = b2.startTime + b2.duration;
 
-      // Rule 1: Standard Shared Resource Conflict (Same resource at the same time)
+      // Rule 1: Standard Shared Resource Conflict (Same physical resource at the same time)
       const sharedResources = b1.resourceIds.filter(id => b2.resourceIds.includes(id));
       if (sharedResources.length > 0 && checkOverlaps(start1, end1, start2, end2)) {
         conflicts.add(b1.id);
@@ -35,7 +35,9 @@ export const findResourceConflicts = (blocks: TimeBlock[]) => {
         continue;
       }
 
-      // Rule 2: Special Autoclave A and B Delay Rule (Must have 30m gap)
+      // Rule 2: Special Autoclave A and B Delay Rule (Staggered Start)
+      // As requested: "autoclave a start at 14:00 ... autoclave b should start at least 14:30"
+      // This means the absolute difference between START TIMES must be at least 30 minutes.
       const isAutoA1 = b1.resourceIds.includes('res-auto-a');
       const isAutoB1 = b1.resourceIds.includes('res-auto-b');
       const isAutoA2 = b2.resourceIds.includes('res-auto-a');
@@ -44,10 +46,7 @@ export const findResourceConflicts = (blocks: TimeBlock[]) => {
       const involvesAandB = (isAutoA1 && isAutoB2) || (isAutoB1 && isAutoA2);
       
       if (involvesAandB) {
-        // Condition for valid: end1 + 30 <= start2 OR end2 + 30 <= start1
-        // Conflict if NOT valid
-        const gapConflict = !(end1 + 30 <= start2 || end2 + 30 <= start1);
-        if (gapConflict) {
+        if (Math.abs(b1.startTime - b2.startTime) < 30) {
           conflicts.add(b1.id);
           conflicts.add(b2.id);
         }

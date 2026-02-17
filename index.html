@@ -86,7 +86,7 @@
         @media print {
             @page {
                 size: landscape;
-                margin: 0;
+                margin: 0.5cm;
             }
             nav, footer, aside, .sidebar-container, .detail-panel-container, .no-print, button, header {
                 display: none !important;
@@ -113,11 +113,23 @@
             .custom-scrollbar {
                 overflow: visible !important;
             }
-            /* Force background colors to print */
+            /* High contrast override for printing */
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
+            }
+            /* Force borders to be dark and text to be bold/black for PDF clarity */
+            .rounded-xl {
+                border-width: 2px !important;
+            }
+            h3 {
+                color: black !important;
+                font-weight: 800 !important;
+            }
+            p {
+                color: #334155 !important;
+                font-weight: 600 !important;
             }
         }
     </style>

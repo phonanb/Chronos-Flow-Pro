@@ -46,8 +46,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const isMobile = window.innerWidth < 1024;
 
-  const handleDragStart = (idx: number) => setDraggedIdx(idx);
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
+  const handleDragStartItem = (idx: number) => setDraggedIdx(idx);
+  
+  const handleTemplateDragStart = (e: React.DragEvent, profile: ProfileBlock) => {
+    // Only handle external drag if not currently reordering
+    e.dataTransfer.setData('application/json', JSON.stringify(profile));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleDragOverItem = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
     if (draggedIdx === null || draggedIdx === idx) return;
     
@@ -107,8 +114,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div 
                   key={p.id} 
                   draggable 
-                  onDragStart={() => handleDragStart(idx)} 
-                  onDragOver={(e) => handleDragOver(e, idx)} 
+                  onDragStart={(e) => {
+                    handleDragStartItem(idx);
+                    handleTemplateDragStart(e, p);
+                  }} 
+                  onDragOver={(e) => handleDragOverItem(e, idx)} 
                   className="group relative"
                 >
                   <button onClick={() => onAddBlockFromProfile(p)} className="w-full text-left p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all flex items-center gap-3">
@@ -140,8 +150,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div 
                   key={c.id} 
                   draggable 
-                  onDragStart={() => handleDragStart(idx)} 
-                  onDragOver={(e) => handleDragOver(e, idx)} 
+                  onDragStart={() => handleDragStartItem(idx)} 
+                  onDragOver={(e) => handleDragOverItem(e, idx)} 
                   className="flex items-center justify-between p-2.5 border dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
                 >
                   <div className="flex items-center gap-2">
@@ -170,8 +180,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div 
                   key={r.id} 
                   draggable 
-                  onDragStart={() => handleDragStart(idx)} 
-                  onDragOver={(e) => handleDragOver(e, idx)} 
+                  onDragStart={() => handleDragStartItem(idx)} 
+                  onDragOver={(e) => handleDragOverItem(e, idx)} 
                   className="p-2.5 border dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 group relative"
                 >
                   <div className="flex items-center justify-between mb-1">

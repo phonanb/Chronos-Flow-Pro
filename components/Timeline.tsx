@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { TimeBlock, LunchBreakRule, EveningBreakRule, Category } from '../types';
+import { TimeBlock, LunchBreakRule, EveningBreakRule, Category, ProfileBlock } from '../types';
 import { START_HOUR, END_HOUR, DAYS_IN_WEEK, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
 import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon } from 'lucide-react';
@@ -8,6 +8,7 @@ import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffe
 interface TimelineProps {
   blocks: TimeBlock[];
   categories: Category[];
+  profiles: ProfileBlock[];
   onUpdateBlock: (block: TimeBlock) => void;
   onDeleteBlock: (id: string) => void;
   onSelectBlock: (blockId: string) => void;
@@ -20,11 +21,13 @@ interface TimelineProps {
   zoom: number;
   isFullScreen: boolean;
   onToggleFullScreen: () => void;
+  onAddBlockAtPosition: (profile: ProfileBlock, startTime: number, lane: number) => void;
 }
 
 const Timeline: React.FC<TimelineProps> = ({ 
   blocks, 
   categories,
+  profiles,
   onUpdateBlock, 
   onDeleteBlock, 
   onSelectBlock,
@@ -36,9 +39,11 @@ const Timeline: React.FC<TimelineProps> = ({
   fontSize,
   zoom,
   isFullScreen,
-  onToggleFullScreen
+  onToggleFullScreen,
+  onAddBlockAtPosition
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [draggingBlock, setDraggingBlock] = useState<{ id: string, initialX: number, initialY: number, initialStart: number, initialLane: number } | null>(null);
 
   // 7 Days of Hours
@@ -49,7 +54,7 @@ const Timeline: React.FC<TimelineProps> = ({
   
   const currentPPM = PIXELS_PER_MINUTE * zoom;
   const laneSize = 160 * zoom; 
-  const HEADER_HEIGHT = 80; // Slightly taller for Day labels
+  const HEADER_HEIGHT = 80; // Day + Hour header height
 
   const startDrag = (clientX: number, clientY: number, block: TimeBlock) => {
     if (block.isLocked) return;
@@ -113,6 +118,32 @@ const Timeline: React.FC<TimelineProps> = ({
       document.body.classList.remove('no-scroll');
     };
   }, [draggingBlock, moveDrag]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const data = e.dataTransfer.getData('application/json');
+    if (!data || !contentRef.current) return;
+    
+    const profile = JSON.parse(data) as ProfileBlock;
+    const rect = contentRef.current.getBoundingClientRect();
+    const scrollLeft = scrollContainerRef.current?.scrollLeft || 0;
+    const scrollTop = scrollContainerRef.current?.scrollTop || 0;
+    
+    // Position relative to contentRef's coordinate space
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Convert pixels to minutes and lanes
+    const droppedTimeMinutes = Math.max(0, Math.floor(x / currentPPM / 15) * 15);
+    const droppedLane = Math.max(0, Math.floor((y - HEADER_HEIGHT) / laneSize));
+    
+    onAddBlockAtPosition(profile, droppedTimeMinutes, droppedLane);
+  };
 
   const renderArrows = () => (
     <svg className="absolute inset-0 pointer-events-none overflow-visible z-10 no-print">
@@ -181,8 +212,11 @@ const Timeline: React.FC<TimelineProps> = ({
       <div 
         ref={scrollContainerRef} 
         className="flex-1 overflow-auto custom-scrollbar relative"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         <div 
+          ref={contentRef}
           style={{ 
             width: contentWidth, 
             height: contentHeight, 
@@ -227,6 +261,7 @@ const Timeline: React.FC<TimelineProps> = ({
               return (
                 <div
                   key={block.id}
+                  title={block.title}
                   onMouseDown={(e) => { e.stopPropagation(); startDrag(e.clientX, e.clientY, block); }}
                   onTouchStart={(e) => { e.stopPropagation(); startDrag(e.touches[0].clientX, e.touches[0].clientY, block); }}
                   className={`absolute rounded-xl border-l-[6px] p-2 sm:p-3 shadow-sm transition-all cursor-grab active:cursor-grabbing group pointer-events-auto overflow-hidden

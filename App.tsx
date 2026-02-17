@@ -85,13 +85,13 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handleAddBlockFromProfile = (profile: ProfileBlock) => {
+  const handleAddBlockAtPosition = (profile: ProfileBlock, startTime: number, lane: number) => {
     const newBlock: TimeBlock = {
       id: Math.random().toString(36).substr(2, 9),
       title: profile.name,
       originalTitle: profile.name,
       description: '',
-      startTime: 480, // Start at 8:00 AM by default
+      startTime: startTime,
       duration: profile.defaultDuration,
       categoryId: profile.categoryId,
       dependencies: [],
@@ -99,12 +99,16 @@ const App: React.FC = () => {
       prerequisites: [],
       color: profile.color,
       isLocked: false,
-      lane: 0
+      lane: lane
     };
     setBlocks(prev => [...prev, newBlock]);
     setSelectedBlockId(newBlock.id);
     if (!isRightPanelOpen) setIsRightPanelOpen(true);
     if (window.innerWidth < 1024) setMobileTab('detail');
+  };
+
+  const handleAddBlockFromProfile = (profile: ProfileBlock) => {
+    handleAddBlockAtPosition(profile, 480, 0); // Default to 8:00 AM, Lane 0
   };
 
   const handleUpdateBlock = (updatedBlock: TimeBlock) => {
@@ -230,13 +234,14 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <Timeline 
-                  blocks={blocks} categories={categories}
+                  blocks={blocks} categories={categories} profiles={profiles}
                   onUpdateBlock={handleUpdateBlock} onDeleteBlock={(id) => setBlocks(prev => prev.filter(b => b.id !== id))} 
                   onSelectBlock={(id) => { setSelectedBlockId(id); if (isMobile && id) setMobileTab('detail'); }} 
                   selectedBlockId={selectedBlockId} 
                   lunchRule={lunchRule} eveningRule={eveningRule}
                   onSplitBlock={handleSplitBlock} onMergeBlocks={handleMergeBlocks}
                   fontSize={12} zoom={zoom} isFullScreen={isCenterFullScreen} onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
+                  onAddBlockAtPosition={handleAddBlockAtPosition}
                 />
               )}
            </div>
