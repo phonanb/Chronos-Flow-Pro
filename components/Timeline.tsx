@@ -206,7 +206,8 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
    * Generates SVG path data for dependency arrows
    */
   const dependencyPaths = useMemo(() => {
-    const paths: JSX.Element[] = [];
+    // Fix: Use React.JSX.Element to avoid "Cannot find namespace 'JSX'" error
+    const paths: React.JSX.Element[] = [];
     
     blocks.forEach(succ => {
       if (!succ.dependencies || succ.dependencies.length === 0) return;
