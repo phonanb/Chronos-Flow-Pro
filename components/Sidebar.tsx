@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot } from '../types';
+import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot, GroupTemplate } from '../types';
 import { COLOR_MAP } from '../constants';
-import { Plus, Coffee, Clock, Settings, Edit3, Trash2, ChevronLeft, ChevronRight, Tags, Boxes, Download, FileText, Sparkles, Loader2, History, RotateCcw } from 'lucide-react';
+import { Plus, Coffee, Clock, Settings, Edit3, Trash2, ChevronLeft, ChevronRight, Tags, Boxes, Download, FileText, Sparkles, Loader2, History, RotateCcw, LayoutGrid } from 'lucide-react';
 import { downloadFile } from '../utils';
 
 const InputLabel = ({ children }: { children?: React.ReactNode }) => (
@@ -13,9 +13,12 @@ const InputLabel = ({ children }: { children?: React.ReactNode }) => (
 
 interface SidebarProps {
   profiles: ProfileBlock[];
+  groupTemplates: GroupTemplate[];
   categories: Category[];
   resources: Resource[];
   onAddBlockFromProfile: (profile: ProfileBlock) => void;
+  onAddGroupFromTemplate: (template: GroupTemplate) => void;
+  onDeleteGroupTemplate: (id: string) => void;
   onUpdateProfiles: (profiles: ProfileBlock[]) => void;
   onUpdateCategories: (categories: Category[]) => void;
   onUpdateResources: (resources: Resource[]) => void;
@@ -38,13 +41,13 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
-  profiles, categories, resources, 
-  onAddBlockFromProfile, onUpdateProfiles, onUpdateCategories, onUpdateResources,
+  profiles, groupTemplates, categories, resources, 
+  onAddBlockFromProfile, onAddGroupFromTemplate, onDeleteGroupTemplate, onUpdateProfiles, onUpdateCategories, onUpdateResources,
   lunchRule, onUpdateLunchRule, isOpen, onToggle,
   onExportCSV, onExportPDF, onAiGenerate, isAiGenerating,
   history, onTakeSnapshot, onRestoreSnapshot, onDeleteSnapshot
 }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'history' | 'ai' | 'categories' | 'resources' | 'rules'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'groups' | 'history' | 'ai' | 'categories' | 'resources' | 'rules'>('templates');
   const [editingProfile, setEditingProfile] = useState<ProfileBlock | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -56,6 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="hidden lg:flex w-full sidebar-container bg-white dark:bg-dark-surface border-r dark:border-dark-border flex-col items-center py-4 gap-6 h-full transition-all shrink-0">
         <button onClick={onToggle} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronRight size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('templates');}} className="p-2 text-indigo-600" title="Templates"><Clock size={20} /></button>
+        <button onClick={() => {onToggle(); setActiveTab('groups');}} className="p-2 text-indigo-400" title="Groups"><LayoutGrid size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('history');}} className="p-2 text-slate-500" title="History"><History size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('ai');}} className="p-2 text-purple-600" title="AI Studio"><Sparkles size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('categories');}} className="p-2 text-blue-500" title="Categories"><Tags size={20} /></button>
@@ -71,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className="w-full sidebar-container flex flex-col bg-white dark:bg-dark-surface h-full overflow-hidden transition-all shrink-0 z-50">
       <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
         <div className="flex gap-1 overflow-x-auto no-scrollbar">
-          {['templates', 'history', 'ai', 'categories', 'resources', 'rules'].map((tab) => (
+          {['templates', 'groups', 'history', 'ai', 'categories', 'resources', 'rules'].map((tab) => (
             <button 
               key={tab} 
               onClick={() => setActiveTab(tab as any)} 
@@ -79,6 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               title={tab.charAt(0).toUpperCase() + tab.slice(1)}
             >
               {tab === 'templates' && <Clock size={18} />}
+              {tab === 'groups' && <LayoutGrid size={18} />}
               {tab === 'history' && <History size={18} />}
               {tab === 'ai' && <Sparkles size={18} />}
               {tab === 'categories' && <Tags size={18} />}
@@ -106,6 +111,28 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <p className="text-[9px] text-slate-400">{p.defaultDuration}m</p>
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); setEditingProfile(p); }} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 transition-opacity"><Edit3 size={12} /></button>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'groups' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Saved Groups</h3>
+            </div>
+            {groupTemplates.length === 0 ? (
+              <p className="text-center py-8 text-[10px] uppercase text-slate-400 font-bold tracking-widest leading-loose">Select multiple blocks<br/>to save as group</p>
+            ) : groupTemplates.map((t) => (
+              <div key={t.id} draggable onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify(t)); }} className="group relative">
+                <button onClick={() => onAddGroupFromTemplate(t)} className="w-full text-left p-3 rounded-xl border dark:border-slate-800 hover:border-indigo-400 transition-all flex items-center gap-3 bg-slate-50/50 dark:bg-slate-900/50">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 shadow-sm"><LayoutGrid size={14} /></div>
+                  <div className="flex-1 truncate">
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.name}</p>
+                    <p className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">{t.blocks.length} Items</p>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); onDeleteGroupTemplate(t.id); }} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 transition-opacity"><Trash2 size={12} /></button>
                 </button>
               </div>
             ))}

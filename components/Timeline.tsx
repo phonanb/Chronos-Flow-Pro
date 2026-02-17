@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { TimeBlock, LunchBreakRule, EveningBreakRule, Category, ProfileBlock } from '../types';
+import { TimeBlock, LunchBreakRule, EveningBreakRule, Category, ProfileBlock, GroupTemplate } from '../types';
 import { START_HOUR, END_HOUR, DAYS_IN_WEEK, MINUTES_IN_HOUR, PIXELS_PER_MINUTE, COLOR_MAP } from '../constants';
 import { formatTime, findResourceConflicts, getMaxLane } from '../utils';
 import { Scissors, Trash2, Boxes, LayoutGrid, Merge, Maximize2, Minimize2, Coffee, Moon, MousePointer2 } from 'lucide-react';
@@ -9,11 +9,20 @@ export interface TimelineRef {
   scrollToFirstBlock: () => void;
 }
 
+interface DragState {
+  initialMouseX: number;
+  initialMouseY: number;
+  initialPositions: Map<string, { startTime: number, lane: number }>;
+  moved: boolean;
+}
+
 interface TimelineProps {
   blocks: TimeBlock[];
   categories: Category[];
   profiles: ProfileBlock[];
+  groupTemplates: GroupTemplate[];
   onUpdateBlock: (block: TimeBlock) => void;
+  onUpdateBlocksBulk: (blocks: TimeBlock[]) => void;
   onDeleteBlock: (id: string) => void;
   onSelectBlock: (blockId: string, multi: boolean) => void;
   onSelectBlocks: (blockIds: string[]) => void;
@@ -27,13 +36,16 @@ interface TimelineProps {
   isFullScreen: boolean;
   onToggleFullScreen: () => void;
   onAddBlockAtPosition: (profile: ProfileBlock, startTime: number, lane: number) => void;
+  onAddGroupAtPosition: (template: GroupTemplate, startTime: number, lane: number) => void;
 }
 
 const Timeline = forwardRef<TimelineRef, TimelineProps>(({ 
   blocks, 
   categories,
   profiles,
+  groupTemplates,
   onUpdateBlock, 
+  onUpdateBlocksBulk,
   onDeleteBlock, 
   onSelectBlock,
   onSelectBlocks,
@@ -46,12 +58,13 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   zoom,
   isFullScreen,
   onToggleFullScreen,
-  onAddBlockAtPosition
+  onAddBlockAtPosition,
+  onAddGroupAtPosition
 }, ref) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   
-  const [draggingBlock, setDraggingBlock] = useState<{ id: string, initialX: number, initialY: number, initialStart: number, initialLane: number, moved: boolean } | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null);
 
   const currentPPM = PIXELS_PER_MINUTE * zoom;
@@ -74,18 +87,33 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
 
   const startDrag = (clientX: number, clientY: number, block: TimeBlock, isShift: boolean) => {
     if (block.isLocked) return;
-    setDraggingBlock({ 
-      id: block.id, 
-      initialX: clientX, 
-      initialY: clientY, 
-      initialStart: block.startTime,
-      initialLane: block.lane,
+
+    let targetIds = selectedBlockIds;
+    // If we click on a block that's not selected, we switch selection to it (unless shift is pressed)
+    if (!selectedBlockIds.includes(block.id)) {
+      if (isShift) {
+        targetIds = [...selectedBlockIds, block.id];
+        onSelectBlocks(targetIds);
+      } else {
+        targetIds = [block.id];
+        onSelectBlocks(targetIds);
+      }
+    }
+
+    // Capture initial positions of all selected items
+    const positions = new Map<string, { startTime: number, lane: number }>();
+    blocks.forEach(b => {
+      if (targetIds.includes(b.id)) {
+        positions.set(b.id, { startTime: b.startTime, lane: b.lane });
+      }
+    });
+
+    setDragState({ 
+      initialMouseX: clientX, 
+      initialMouseY: clientY, 
+      initialPositions: positions,
       moved: false
     });
-    
-    if (!selectedBlockIds.includes(block.id)) {
-      onSelectBlock(block.id, isShift);
-    }
   };
 
   const startSelection = (clientX: number, clientY: number) => {
@@ -106,7 +134,6 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     const newRect = { ...selectionRect, currentX: x, currentY: y };
     setSelectionRect(newRect);
 
-    // Calculate selection
     const x1 = Math.min(newRect.startX, newRect.currentX);
     const x2 = Math.max(newRect.startX, newRect.currentX);
     const y1 = Math.min(newRect.startY, newRect.currentY);
@@ -125,46 +152,48 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   }, [selectionRect, blocks, currentPPM, laneSize, onSelectBlocks]);
 
   const moveDrag = useCallback((clientX: number, clientY: number) => {
-    if (!draggingBlock || !scrollContainerRef.current) return;
+    if (!dragState || !scrollContainerRef.current) return;
     
-    const deltaX = clientX - draggingBlock.initialX;
-    const deltaY = clientY - draggingBlock.initialY;
+    const deltaX = clientX - dragState.initialMouseX;
+    const deltaY = clientY - dragState.initialMouseY;
     
-    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
-      setDraggingBlock(prev => prev ? { ...prev, moved: true } : null);
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      if (!dragState.moved) {
+         setDragState(prev => prev ? { ...prev, moved: true } : null);
+      }
     }
 
     const timeDelta = Math.round(deltaX / currentPPM / 15) * 15;
-    const maxMinutes = DAYS_IN_WEEK * 24 * 60;
-    
     const laneDelta = Math.round(deltaY / laneSize);
 
-    // Update the main dragging block
-    const mainBlock = blocks.find(b => b.id === draggingBlock.id);
-    if (!mainBlock) return;
+    const maxMinutes = DAYS_IN_WEEK * 24 * 60;
+    const updatedBlocks: TimeBlock[] = [];
 
-    // Apply movement to all selected blocks (bulk move)
-    selectedBlockIds.forEach(id => {
+    // Apply movement to all items that were captured at start of drag
+    dragState.initialPositions.forEach((initial, id) => {
       const b = blocks.find(blk => blk.id === id);
       if (!b || b.isLocked) return;
 
-      const originalBlock = b.id === draggingBlock.id ? draggingBlock : { initialStart: b.startTime, initialLane: b.lane };
-      const newStart = Math.max(0, Math.min(maxMinutes - b.duration, originalBlock.initialStart + timeDelta));
-      const newLane = Math.max(0, originalBlock.initialLane + laneDelta);
+      const newStart = Math.max(0, Math.min(maxMinutes - b.duration, initial.startTime + timeDelta));
+      const newLane = Math.max(0, initial.lane + laneDelta);
 
       if (newStart !== b.startTime || newLane !== b.lane) {
-        onUpdateBlock({ ...b, startTime: newStart, lane: newLane });
+        updatedBlocks.push({ ...b, startTime: newStart, lane: newLane });
       }
     });
-  }, [draggingBlock, blocks, currentPPM, laneSize, onUpdateBlock, selectedBlockIds]);
+
+    if (updatedBlocks.length > 0) {
+      onUpdateBlocksBulk(updatedBlocks);
+    }
+  }, [dragState, blocks, currentPPM, laneSize, onUpdateBlocksBulk]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (draggingBlock) moveDrag(e.clientX, e.clientY);
+      if (dragState) moveDrag(e.clientX, e.clientY);
       else if (selectionRect) moveSelection(e.clientX, e.clientY);
     };
     const handleMouseUp = () => {
-      setDraggingBlock(null);
+      setDragState(null);
       setSelectionRect(null);
     };
     
@@ -174,7 +203,7 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingBlock, selectionRect, moveDrag, moveSelection]);
+  }, [dragState, selectionRect, moveDrag, moveSelection]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -183,10 +212,10 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const data = e.dataTransfer.getData('application/json');
-    if (!data || !contentRef.current) return;
+    const dataString = e.dataTransfer.getData('application/json');
+    if (!dataString || !contentRef.current) return;
     
-    const profile = JSON.parse(data) as ProfileBlock;
+    const data = JSON.parse(dataString);
     const rect = contentRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -194,7 +223,12 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     const droppedTimeMinutes = Math.max(0, Math.floor(x / currentPPM / 15) * 15);
     const droppedLane = Math.max(0, Math.floor((y - HEADER_HEIGHT) / laneSize));
     
-    onAddBlockAtPosition(profile, droppedTimeMinutes, droppedLane);
+    // Check if it's a group template or profile block
+    if (data.blocks) {
+      onAddGroupAtPosition(data as GroupTemplate, droppedTimeMinutes, droppedLane);
+    } else {
+      onAddBlockAtPosition(data as ProfileBlock, droppedTimeMinutes, droppedLane);
+    }
   };
 
   const resourceConflicts = useMemo(() => findResourceConflicts(blocks), [blocks]);

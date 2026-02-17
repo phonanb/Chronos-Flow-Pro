@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot } from './types';
+import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot, GroupTemplate } from './types';
 import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
@@ -22,6 +22,7 @@ const App: React.FC = () => {
 
   const [blocks, setBlocks] = useState<TimeBlock[]>(() => loadState('cfp_blocks', []));
   const [profiles, setProfiles] = useState<ProfileBlock[]>(() => loadState('cfp_profiles', INITIAL_PROFILES));
+  const [groupTemplates, setGroupTemplates] = useState<GroupTemplate[]>(() => loadState('cfp_group_templates', []));
   const [categories, setCategories] = useState<Category[]>(() => loadState('cfp_categories', INITIAL_CATEGORIES));
   const [resources, setResources] = useState<Resource[]>(() => loadState('cfp_resources', INITIAL_RESOURCES));
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
@@ -108,6 +109,7 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('cfp_blocks', JSON.stringify(blocks));
     localStorage.setItem('cfp_profiles', JSON.stringify(profiles));
+    localStorage.setItem('cfp_group_templates', JSON.stringify(groupTemplates));
     localStorage.setItem('cfp_categories', JSON.stringify(categories));
     localStorage.setItem('cfp_resources', JSON.stringify(resources));
     localStorage.setItem('cfp_lunchRule', JSON.stringify(lunchRule));
@@ -115,7 +117,7 @@ const App: React.FC = () => {
     localStorage.setItem('cfp_history', JSON.stringify(history));
     localStorage.setItem('cfp_darkMode', JSON.stringify(isDarkMode));
     localStorage.setItem('cfp_zoom', JSON.stringify(zoom));
-  }, [blocks, profiles, categories, resources, lunchRule, eveningRule, history, isDarkMode, zoom]);
+  }, [blocks, profiles, groupTemplates, categories, resources, lunchRule, eveningRule, history, isDarkMode, zoom]);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
@@ -192,24 +194,17 @@ const App: React.FC = () => {
     setEveningRule(snapshot.eveningRule);
   };
 
-  /**
-   * Free Pattern-Learning AI 
-   * It analyzes current blocks to find a "Job Template" and extrapolates it across the week.
-   */
   const handleAiGenerate = async () => {
     if (isAiGenerating) return;
     takeSnapshot(`Pre-Generation Backup`);
     setIsAiGenerating(true);
 
-    // Visual feedback for the "Learning" process
     await new Promise(resolve => setTimeout(resolve, 1800));
 
     try {
       let sourceBlocks = [...blocks];
-      
-      // If timeline is empty, learn from default initial profiles to create a starter kit
       if (sourceBlocks.length === 0) {
-        let startTime = 480; // 8 AM
+        let startTime = 480; 
         sourceBlocks = INITIAL_PROFILES.map((p, idx) => {
           const b: TimeBlock = {
             id: `init-${idx}`,
@@ -226,26 +221,21 @@ const App: React.FC = () => {
             isLocked: false,
             lane: 0
           };
-          startTime += p.defaultDuration + 30; // 30m gap
+          startTime += p.defaultDuration + 30; 
           return b;
         });
       }
 
-      // 1. Analyze the pattern
       const minStart = Math.min(...sourceBlocks.map(b => b.startTime));
       const maxEnd = Math.max(...sourceBlocks.map(b => b.startTime + b.duration));
       const jobDuration = maxEnd - minStart;
-      
-      // Determine the best repeat interval (Job Duration + a reasonable gap)
-      const repeatInterval = Math.max(jobDuration + 60, 480); // At least every 8 hours or job duration + 1h
-      const weekLimit = 7 * 24 * 60; // 7 days in minutes
+      const repeatInterval = Math.max(jobDuration + 60, 480); 
+      const weekLimit = 7 * 24 * 60; 
 
       const newGeneratedBlocks: TimeBlock[] = [...sourceBlocks];
       let currentOffset = repeatInterval;
 
-      // 2. Extrapolate pattern to fill 7 days
       while (minStart + currentOffset + jobDuration < weekLimit) {
-        // Clone the source block set with the new time offset
         sourceBlocks.forEach(b => {
           const newId = `ai-${Math.random().toString(36).substr(2, 5)}-${b.id}`;
           newGeneratedBlocks.push({
@@ -253,12 +243,7 @@ const App: React.FC = () => {
             id: newId,
             title: b.title.replace(/Lot \d+/, '') + ` Lot ${Math.floor(currentOffset / repeatInterval) + 1}`,
             startTime: b.startTime + currentOffset,
-            // Re-map dependencies to the new IDs within this cycle
-            dependencies: b.dependencies.map(depId => {
-              const depBlock = sourceBlocks.find(sb => sb.id === depId);
-              if (!depBlock) return depId;
-              return `ai-${Math.random().toString(36).substr(2, 5)}-${depId}`; // This is simplified; ideally we'd map precisely
-            }).filter(() => false) // Resetting dependencies for simplicity in local generated cycles to avoid circular refs
+            dependencies: [] 
           });
         });
         currentOffset += repeatInterval;
@@ -270,7 +255,7 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error(error);
-      alert("The Pattern-Learning engine encountered an unexpected layout. Try clearing the timeline and adding a simple sequence first.");
+      alert("The Pattern-Learning engine encountered an unexpected layout.");
     } finally {
       setIsAiGenerating(false);
     }
@@ -331,7 +316,54 @@ const App: React.FC = () => {
     setSelectedBlockIds([newBlock.id]);
   };
 
+  const handleAddGroupAtPosition = (template: GroupTemplate, startTime: number, lane: number) => {
+    const newBlocks: TimeBlock[] = template.blocks.map((b, idx) => ({
+      id: `group-${template.id}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+      title: b.title,
+      description: 'Group Item',
+      startTime: startTime + b.relativeStartTime,
+      duration: b.duration,
+      categoryId: b.categoryId,
+      dependencies: [],
+      resourceIds: [...b.resourceIds],
+      prerequisites: [],
+      color: b.color,
+      isLocked: false,
+      lane: lane + b.relativeLane
+    }));
+    recordChange([...blocks, ...newBlocks]);
+    setSelectedBlockIds(newBlocks.map(b => b.id));
+  };
+
+  const handleSaveGroupTemplate = (name: string) => {
+    if (selectedBlockIds.length < 2) return;
+    const selected = blocks.filter(b => selectedBlockIds.includes(b.id));
+    const minStart = Math.min(...selected.map(b => b.startTime));
+    const minLane = Math.min(...selected.map(b => b.lane));
+
+    const newTemplate: GroupTemplate = {
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      blocks: selected.map(b => ({
+        title: b.title,
+        duration: b.duration,
+        categoryId: b.categoryId,
+        resourceIds: [...b.resourceIds],
+        relativeStartTime: b.startTime - minStart,
+        relativeLane: b.lane - minLane,
+        color: b.color
+      }))
+    };
+    setGroupTemplates(prev => [...prev, newTemplate]);
+  };
+
   const handleUpdateBlock = (updated: TimeBlock) => recordChange(blocks.map(b => b.id === updated.id ? updated : b));
+  
+  const handleUpdateBlocksBulk = (updatedSet: TimeBlock[]) => {
+    const updatedIds = new Set(updatedSet.map(u => u.id));
+    recordChange(blocks.map(b => updatedIds.has(b.id) ? updatedSet.find(u => u.id === b.id)! : b));
+  };
+
   const handleDeleteBlocks = (ids: string[]) => { recordChange(blocks.filter(b => !ids.includes(b.id))); setSelectedBlockIds([]); };
 
   const handleDuplicateBlocks = (ids: string[]) => {
@@ -401,9 +433,11 @@ const App: React.FC = () => {
           style={!isMobile ? { width: isLeftPanelOpen ? leftWidth : 56 } : {}}
         >
           <Sidebar 
-            profiles={profiles} categories={categories} resources={resources}
+            profiles={profiles} groupTemplates={groupTemplates} categories={categories} resources={resources}
             onUpdateProfiles={setProfiles} onUpdateCategories={setCategories} onUpdateResources={setResources}
             onAddBlockFromProfile={(p) => handleAddBlockAtPosition(p, 480, 0)} 
+            onAddGroupFromTemplate={(t) => handleAddGroupAtPosition(t, 480, 0)}
+            onDeleteGroupTemplate={(id) => setGroupTemplates(prev => prev.filter(t => t.id !== id))}
             lunchRule={lunchRule} onUpdateLunchRule={setLunchRule}
             eveningRule={eveningRule} onUpdateEveningRule={setEveningRule}
             isOpen={isLeftPanelOpen || mobileTab === 'sidebar'}
@@ -440,8 +474,9 @@ const App: React.FC = () => {
            <div className="flex-1 overflow-hidden relative">
               <Timeline 
                 ref={timelineRef}
-                blocks={blocks} categories={categories} profiles={profiles}
+                blocks={blocks} categories={categories} profiles={profiles} groupTemplates={groupTemplates}
                 onUpdateBlock={handleUpdateBlock} 
+                onUpdateBlocksBulk={handleUpdateBlocksBulk}
                 onDeleteBlock={(id) => handleDeleteBlocks([id])} 
                 onSelectBlock={(id, multi) => setSelectedBlockIds(prev => multi ? (prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]) : [id])} 
                 onSelectBlocks={setSelectedBlockIds}
@@ -471,6 +506,7 @@ const App: React.FC = () => {
                 }}
                 fontSize={12} zoom={zoom} isFullScreen={isCenterFullScreen} onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
                 onAddBlockAtPosition={handleAddBlockAtPosition}
+                onAddGroupAtPosition={handleAddGroupAtPosition}
               />
               {isAiGenerating && (
                 <div className="absolute inset-0 bg-white/60 dark:bg-dark-bg/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-6">
@@ -501,6 +537,7 @@ const App: React.FC = () => {
             onToggle={() => setIsRightPanelOpen(!isRightPanelOpen)}
             onDeleteSelected={() => handleDeleteBlocks(selectedBlockIds)}
             onDuplicateSelected={() => handleDuplicateBlocks(selectedBlockIds)}
+            onSaveGroupTemplate={handleSaveGroupTemplate}
           />
         </aside>
       </main>

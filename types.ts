@@ -36,6 +36,20 @@ export interface ProfileBlock {
   resourceIds: string[];
 }
 
+export interface GroupTemplate {
+  id: string;
+  name: string;
+  blocks: {
+    title: string;
+    duration: number;
+    categoryId: string;
+    resourceIds: string[];
+    relativeStartTime: number; // offset from min startTime of group
+    relativeLane: number;      // offset from min lane of group
+    color: string;
+  }[];
+}
+
 export interface LunchBreakRule {
   enabled: boolean;
   startTime: number;
