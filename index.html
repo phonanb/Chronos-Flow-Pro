@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Chronos Flow Pro | Weekly Industrial Planner</title>
+    <title>Chronos Flow Pro | Resizable Industrial Planner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
@@ -42,6 +42,12 @@
             color: #f8fafc;
         }
         
+        .no-scroll {
+            overflow: hidden !important;
+            touch-action: none;
+            user-select: none;
+        }
+
         /* Bigger Scrollbars */
         .custom-scrollbar::-webkit-scrollbar {
             width: 14px;
@@ -78,17 +84,12 @@
                 linear-gradient(to bottom, rgba(30, 41, 59, 0.5) 1.5px, transparent 1.5px);
         }
 
-        .no-scroll {
-            overflow: hidden !important;
-            touch-action: none;
-        }
-
         @media print {
             @page {
                 size: landscape;
                 margin: 0.5cm;
             }
-            nav, footer, aside, .sidebar-container, .detail-panel-container, .no-print, button, header {
+            nav, footer, aside, .sidebar-container, .detail-panel-container, .no-print, button, header, [role="separator"] {
                 display: none !important;
             }
             body { 
@@ -113,13 +114,11 @@
             .custom-scrollbar {
                 overflow: visible !important;
             }
-            /* High contrast override for printing */
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }
-            /* Force borders to be dark and text to be bold/black for PDF clarity */
             .rounded-xl {
                 border-width: 2px !important;
             }
@@ -150,6 +149,5 @@
 <body class="bg-slate-50 dark:bg-dark-bg transition-colors duration-300">
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
-    <script type="module" src="./index.js"></script>
 </body>
 </html>

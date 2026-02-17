@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
 import { INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Share2, Check, Undo2, Redo2, Copy, Trash2 } from 'lucide-react';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Share2, Check, Undo2, Redo2, Copy, Trash2, Heart, X, GripVertical } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -37,17 +37,66 @@ const App: React.FC = () => {
   const [shareFeedback, setShareFeedback] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [isShortening, setIsShortening] = useState(false);
+  const [showDonateModal, setShowDonateModal] = useState(false);
   
   const [undoStack, setUndoStack] = useState<TimeBlock[][]>([]);
   const [redoStack, setRedoStack] = useState<TimeBlock[][]>([]);
 
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
-  const [leftWidth] = useState(() => loadState('cfp_leftWidth', 260));
-  const [rightWidth] = useState(() => loadState('cfp_rightWidth', 320));
+  
+  // Resizable state
+  const [leftWidth, setLeftWidth] = useState(() => loadState('cfp_leftWidth', 280));
+  const [rightWidth, setRightWidth] = useState(() => loadState('cfp_rightWidth', 340));
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
 
   const timelineRef = useRef<TimelineRef>(null);
   const hasInitialScrolled = useRef(false);
+
+  // Resize handling
+  const startResizingLeft = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingLeft(true);
+  }, []);
+
+  const startResizingRight = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingRight(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizingLeft(false);
+    setIsResizingRight(false);
+  }, []);
+
+  const resize = useCallback((e: MouseEvent) => {
+    if (isResizingLeft) {
+      const newWidth = Math.min(Math.max(200, e.clientX), 500);
+      setLeftWidth(newWidth);
+      localStorage.setItem('cfp_leftWidth', JSON.stringify(newWidth));
+    } else if (isResizingRight) {
+      const newWidth = Math.min(Math.max(250, window.innerWidth - e.clientX), 600);
+      setRightWidth(newWidth);
+      localStorage.setItem('cfp_rightWidth', JSON.stringify(newWidth));
+    }
+  }, [isResizingLeft, isResizingRight]);
+
+  useEffect(() => {
+    if (isResizingLeft || isResizingRight) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+      document.body.classList.add('no-scroll', 'cursor-col-resize');
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+      document.body.classList.remove('no-scroll', 'cursor-col-resize');
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizingLeft, isResizingRight, resize, stopResizing]);
 
   // Requirement: Auto-scroll to first box on mount
   useEffect(() => {
@@ -228,7 +277,6 @@ const App: React.FC = () => {
     finally { setIsShortening(false); }
   };
 
-  // Requirement: Scroll to first box before PDF export
   const handleExportPDF = () => {
     if (timelineRef.current) {
       timelineRef.current.scrollToFirstBlock();
@@ -303,6 +351,10 @@ const App: React.FC = () => {
              </div>
 
              <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
+                <button onClick={() => setShowDonateModal(true)} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm bg-rose-500 text-white shadow-rose-500/20 hover:bg-rose-600" title="Donate">
+                  <Heart size={16} className="fill-current" />
+                  <span className="hidden sm:inline">Donate</span>
+                </button>
                 <button onClick={handleShare} disabled={isShortening} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'} ${isShortening ? 'opacity-70 animate-pulse' : ''}`}>
                   {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
                   <span className="hidden sm:inline">{shareFeedback ? 'Copied' : (isShortening ? 'Shortening...' : 'Share')}</span>
@@ -317,8 +369,9 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 flex overflow-hidden">
+        {/* Sidebar Panel */}
         <aside 
-          className={`${!isMobile ? 'lg:flex lg:relative' : (mobileTab === 'sidebar' ? 'flex flex-1' : 'hidden')} ${isCenterFullScreen ? 'hidden' : ''} h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border shrink-0 overflow-hidden relative`}
+          className={`${!isMobile ? 'lg:flex lg:relative' : (mobileTab === 'sidebar' ? 'flex flex-1' : 'hidden')} ${isCenterFullScreen ? 'hidden' : ''} h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border shrink-0 overflow-hidden relative group`}
           style={!isMobile ? { width: isLeftPanelOpen ? leftWidth : 56 } : {}}
         >
           <Sidebar 
@@ -347,8 +400,18 @@ const App: React.FC = () => {
             onRestoreSnapshot={restoreSnapshot}
             onDeleteSnapshot={(id) => setHistory(h => h.filter(s => s.id !== id))}
           />
+          {/* Resize Handle Left */}
+          {isLeftPanelOpen && !isMobile && (
+            <div 
+              onMouseDown={startResizingLeft}
+              className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-500 transition-colors z-50 flex items-center justify-center opacity-0 group-hover:opacity-100"
+            >
+              <GripVertical size={10} className="text-slate-400" />
+            </div>
+          )}
         </aside>
 
+        {/* Timeline Center */}
         <div className={`flex-1 flex flex-col min-w-0 h-full ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
            <div className="flex-1 overflow-hidden relative">
               <Timeline 
@@ -394,10 +457,20 @@ const App: React.FC = () => {
            </div>
         </div>
 
+        {/* Detail Panel */}
         <aside 
-          className={`${!isMobile ? 'lg:flex lg:relative' : (mobileTab === 'detail' ? 'flex flex-1' : 'hidden')} ${isCenterFullScreen ? 'hidden' : ''} h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border shrink-0 overflow-hidden relative`}
+          className={`${!isMobile ? 'lg:flex lg:relative' : (mobileTab === 'detail' ? 'flex flex-1' : 'hidden')} ${isCenterFullScreen ? 'hidden' : ''} h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border shrink-0 overflow-hidden relative group`}
           style={!isMobile ? { width: isRightPanelOpen ? rightWidth : 56 } : {}}
         >
+          {/* Resize Handle Right */}
+          {isRightPanelOpen && !isMobile && (
+            <div 
+              onMouseDown={startResizingRight}
+              className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-500 transition-colors z-50 flex items-center justify-center opacity-0 group-hover:opacity-100"
+            >
+              <GripVertical size={10} className="text-slate-400" />
+            </div>
+          )}
           <DetailPanel 
             blocks={selectedBlocks} allBlocks={blocks} categories={categories} resources={resources}
             onUpdate={handleUpdateBlock} onClose={() => setSelectedBlockIds([])}
@@ -408,6 +481,37 @@ const App: React.FC = () => {
           />
         </aside>
       </main>
+
+      {/* Donation Modal */}
+      {showDonateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 no-print" onClick={() => setShowDonateModal(false)}>
+          <div className="bg-white dark:bg-dark-surface rounded-3xl shadow-2xl w-full max-w-sm p-8 relative flex flex-col items-center animate-in zoom-in-95 fade-in duration-300" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setShowDonateModal(false)} 
+              className="absolute top-4 right-4 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 text-rose-500 rounded-3xl flex items-center justify-center mb-6 shadow-lg shadow-rose-500/10">
+              <Heart size={32} className="fill-current" />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">Support Development</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-8 leading-relaxed">
+              Scan the QR code below to support our project.
+            </p>
+            
+            <div className="p-4 bg-white rounded-2xl shadow-inner border dark:border-slate-800 overflow-hidden">
+               <img 
+                 src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://github.com/support-chronos-flow" 
+                 alt="Donation QR Code" 
+                 className="w-[240px] h-[240px] object-contain"
+               />
+            </div>
+            
+            <p className="mt-8 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Thank you for your support!</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
