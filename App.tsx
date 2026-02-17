@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
 import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES, DAYS_IN_WEEK } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X, Sparkles } from 'lucide-react';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X, Sparkles, Copy, Trash2 } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
@@ -24,7 +24,7 @@ const App: React.FC = () => {
   const [profiles, setProfiles] = useState<ProfileBlock[]>(() => loadState('cfp_profiles', INITIAL_PROFILES));
   const [categories, setCategories] = useState<Category[]>(() => loadState('cfp_categories', INITIAL_CATEGORIES));
   const [resources, setResources] = useState<Resource[]>(() => loadState('cfp_resources', INITIAL_RESOURCES));
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [lunchRule, setLunchRule] = useState<LunchBreakRule>(() => loadState('cfp_lunchRule', { enabled: true, startTime: 720, endTime: 780 }));
   const [eveningRule, setEveningRule] = useState<EveningBreakRule>(() => loadState('cfp_eveningRule', { enabled: true, startTime: 1020, endTime: 1050 }));
   const [isDarkMode, setIsDarkMode] = useState(() => loadState('cfp_darkMode', true));
@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [shareFeedback, setShareFeedback] = useState(false);
   const [isDonateOpen, setIsDonateOpen] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [isShortening, setIsShortening] = useState(false);
   
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
@@ -43,6 +44,22 @@ const App: React.FC = () => {
 
   const timelineRef = useRef<TimelineRef>(null);
   const resizingRef = useRef<'left' | 'right' | null>(null);
+
+  // Keyboard listeners for Delete key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+        
+        if (selectedBlockIds.length > 0) {
+          handleDeleteBlocks(selectedBlockIds);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedBlockIds, blocks]);
 
   // Handle Shared URL Data
   useEffect(() => {
@@ -60,7 +77,6 @@ const App: React.FC = () => {
         if (decodedData.eveningRule) setEveningRule(decodedData.eveningRule);
         
         window.history.replaceState(null, '', window.location.pathname);
-        alert("Configuration loaded from shared link!");
       } catch (e) {
         console.error("Failed to parse shared data", e);
       }
@@ -112,26 +128,15 @@ const App: React.FC = () => {
     };
   }, []);
 
-  /**
-   * Local Smart Generation Engine
-   * This mimics AI by analyzing existing block distributions and templates 
-   * to create a coherent 7-day operational plan without external API calls.
-   */
   const handleAiGenerate = async () => {
     if (isAiGenerating) return;
     setIsAiGenerating(true);
-    
-    // Simulate thinking/processing time
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
     try {
       let referenceBlocks = blocks.length > 0 ? [...blocks] : [];
-      
-      // If no blocks exist, use the templates (profiles) to build a basic starting set
       if (referenceBlocks.length === 0) {
-        let currentTime = 480; // 08:00 AM
+        let currentTime = 480;
         profiles.forEach((p, i) => {
-          // Fix: Added missing description and prerequisites to match TimeBlock interface
           referenceBlocks.push({
             id: `seed-${i}`,
             title: p.name,
@@ -146,11 +151,9 @@ const App: React.FC = () => {
             isLocked: false,
             lane: 0
           });
-          currentTime += p.defaultDuration + 30; // 30m gap
+          currentTime += p.defaultDuration + 30;
         });
       }
-
-      // Generate the 7-day schedule
       const newPlan: TimeBlock[] = [];
       const blocksByDay = referenceBlocks.reduce((acc, b) => {
         const day = Math.floor(b.startTime / 1440);
@@ -158,20 +161,13 @@ const App: React.FC = () => {
         acc[day].push(b);
         return acc;
       }, {} as Record<number, TimeBlock[]>);
-
-      // Find the "pattern" of the most populated day or combine them
       const dayPattern = Object.values(blocksByDay).sort((a, b) => b.length - a.length)[0] || referenceBlocks;
-
       for (let day = 0; day < DAYS_IN_WEEK; day++) {
         const dayOffset = day * 1440;
         const idMap: Record<string, string> = {};
-        
-        // First pass: Generate new IDs for this day's instance
         dayPattern.forEach(b => {
           idMap[b.id] = `gen-${day}-${Math.random().toString(36).substr(2, 5)}`;
         });
-
-        // Second pass: Create blocks for this day
         dayPattern.forEach(b => {
           const startTimeInDay = b.startTime % 1440;
           newPlan.push({
@@ -179,33 +175,46 @@ const App: React.FC = () => {
             id: idMap[b.id],
             startTime: dayOffset + startTimeInDay,
             dependencies: b.dependencies.map(d => idMap[d]).filter(d => !!d),
-            lane: (b.lane + (day % 3)) // Slight lane variation per day to spread the load visually
+            lane: (b.lane + (day % 3))
           });
         });
       }
-
       setBlocks(newPlan);
       setTimeout(() => timelineRef.current?.scrollToFirstBlock(), 300);
     } catch (error) {
       console.error("Local Generation Error:", error);
-      alert("Smart generation encountered an error. Please check your data.");
+      alert("Smart generation encountered an error.");
     } finally {
       setIsAiGenerating(false);
     }
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
+    setIsShortening(true);
     const stateToShare = { blocks, profiles, categories, resources, lunchRule, eveningRule };
     const jsonStr = JSON.stringify(stateToShare);
     const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
-    const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
+    const longUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
     
-    navigator.clipboard.writeText(shareUrl).then(() => {
+    let finalUrl = longUrl;
+
+    try {
+      const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
+      if (response.ok) {
+        finalUrl = await response.text();
+      }
+    } catch (e) {
+      console.warn("URL shortening failed, using long URL instead.", e);
+    }
+
+    navigator.clipboard.writeText(finalUrl).then(() => {
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
     }).catch(err => {
       alert("Failed to copy link.");
       console.error(err);
+    }).finally(() => {
+      setIsShortening(false);
     });
   };
 
@@ -235,7 +244,7 @@ const App: React.FC = () => {
       lane: lane
     };
     setBlocks(prev => [...prev, newBlock]);
-    setSelectedBlockId(newBlock.id);
+    setSelectedBlockIds([newBlock.id]);
     if (!isRightPanelOpen) setIsRightPanelOpen(true);
     if (window.innerWidth < 1024) setMobileTab('detail');
   };
@@ -248,33 +257,47 @@ const App: React.FC = () => {
     setBlocks(prev => prev.map(b => b.id === updatedBlock.id ? updatedBlock : b));
   };
 
+  const handleDeleteBlocks = (ids: string[]) => {
+    setBlocks(prev => prev.filter(b => !ids.includes(b.id)));
+    setSelectedBlockIds(prev => prev.filter(id => !ids.includes(id)));
+  };
+
+  const handleDuplicateBlocks = (ids: string[]) => {
+    const blocksToCopy = blocks.filter(b => ids.includes(b.id));
+    const newBlocks = blocksToCopy.map(b => ({
+      ...b,
+      id: Math.random().toString(36).substr(2, 9),
+      startTime: b.startTime + 60,
+      lane: b.lane + 1,
+      dependencies: []
+    }));
+    setBlocks(prev => [...prev, ...newBlocks]);
+    setSelectedBlockIds(newBlocks.map(nb => nb.id));
+  };
+
   const handleSplitBlock = (blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
     const blockEndTime = block.startTime + block.duration;
-    
     let splitPoint = block.startTime + Math.floor(block.duration / 2);
     if (lunchRule.enabled && block.startTime < lunchRule.endTime && blockEndTime > lunchRule.startTime) {
       splitPoint = lunchRule.startTime;
     } else if (eveningRule.enabled && block.startTime < eveningRule.endTime && blockEndTime > eveningRule.startTime) {
       splitPoint = eveningRule.startTime;
     }
-
     const firstDuration = splitPoint - block.startTime;
     const secondDuration = blockEndTime - splitPoint;
     if (firstDuration < 15 || secondDuration < 15) {
       alert("Cannot split block: segments too short.");
       return;
     }
-
     let resumeTime = splitPoint;
     if (lunchRule.enabled && splitPoint === lunchRule.startTime) resumeTime = lunchRule.endTime;
     else if (eveningRule.enabled && splitPoint === eveningRule.startTime) resumeTime = eveningRule.endTime;
-
     const part1: TimeBlock = { ...block, id: Math.random().toString(36).substr(2, 9), title: `${block.title} (Part A)`, duration: firstDuration };
     const part2: TimeBlock = { ...block, id: Math.random().toString(36).substr(2, 9), title: `${block.title} (Part B)`, startTime: resumeTime, duration: secondDuration, dependencies: [...block.dependencies, part1.id] };
     setBlocks(prev => [...prev.filter(b => b.id !== blockId), part1, part2]);
-    setSelectedBlockId(part2.id);
+    setSelectedBlockIds([part2.id]);
   };
 
   const handleMergeBlocks = (blockId: string) => {
@@ -286,7 +309,7 @@ const App: React.FC = () => {
     const second = block.startTime < partner.startTime ? partner : block;
     const mergedBlock: TimeBlock = { ...first, id: Math.random().toString(36).substr(2, 9), title: first.originalTitle || first.title, duration: (second.startTime + second.duration) - first.startTime, dependencies: first.dependencies.filter(d => d !== second.id) };
     setBlocks(prev => [...prev.filter(b => b.id !== block.id && b.id !== partner.id), mergedBlock]);
-    setSelectedBlockId(mergedBlock.id);
+    setSelectedBlockIds([mergedBlock.id]);
   };
 
   const handleImportCFP = (file: File) => {
@@ -306,7 +329,7 @@ const App: React.FC = () => {
   };
 
   const isMobile = window.innerWidth < 1024;
-  const selectedBlock = blocks.find(b => b.id === selectedBlockId) || null;
+  const selectedBlocks = blocks.filter(b => selectedBlockIds.includes(b.id));
 
   return (
     <div className="h-screen bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-slate-100 flex flex-col overflow-hidden select-none transition-colors duration-300">
@@ -317,6 +340,16 @@ const App: React.FC = () => {
             <h1 className="hidden sm:block text-sm lg:text-lg font-bold tracking-tight">Chronos Flow Pro</h1>
           </div>
           <div className="flex items-center gap-2 lg:gap-4">
+             {selectedBlockIds.length > 1 && (
+               <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border dark:border-slate-700 animate-in slide-in-from-top-4 duration-300">
+                  <button onClick={() => handleDuplicateBlocks(selectedBlockIds)} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-indigo-600 transition-all flex items-center gap-2" title="Copy Selected">
+                    <Copy size={16} /><span className="text-[10px] font-bold uppercase">Copy ({selectedBlockIds.length})</span>
+                  </button>
+                  <button onClick={() => handleDeleteBlocks(selectedBlockIds)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg text-red-500 transition-all flex items-center gap-2" title="Delete Selected">
+                    <Trash2 size={16} /><span className="text-[10px] font-bold uppercase">Delete</span>
+                  </button>
+               </div>
+             )}
              <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl border dark:border-slate-700/50">
                 <button onClick={() => setZoom(Math.max(0.4, zoom - 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"><ZoomOut size={14} /></button>
                 <span className="text-[10px] font-bold text-slate-400 min-w-[36px] text-center">{Math.round(zoom * 100)}%</span>
@@ -332,10 +365,11 @@ const App: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleShare} 
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'}`}
+                  disabled={isShortening}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'} ${isShortening ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
-                  <span className="hidden sm:inline">{shareFeedback ? 'Link Copied' : 'Share'}</span>
+                  <span className="hidden sm:inline">{shareFeedback ? 'Link Copied' : (isShortening ? 'Shortening...' : 'Share')}</span>
                 </button>
                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
                   {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
@@ -384,9 +418,18 @@ const App: React.FC = () => {
                 <Timeline 
                   ref={timelineRef}
                   blocks={blocks} categories={categories} profiles={profiles}
-                  onUpdateBlock={handleUpdateBlock} onDeleteBlock={(id) => setBlocks(prev => prev.filter(b => b.id !== id))} 
-                  onSelectBlock={(id) => { setSelectedBlockId(id); if (isMobile && id) setMobileTab('detail'); }} 
-                  selectedBlockId={selectedBlockId} 
+                  onUpdateBlock={handleUpdateBlock} 
+                  onDeleteBlock={(id) => handleDeleteBlocks([id])} 
+                  onSelectBlock={(id, multi) => { 
+                    if (multi) {
+                      setSelectedBlockIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+                    } else {
+                      setSelectedBlockIds([id]);
+                    }
+                    if (isMobile && id) setMobileTab('detail'); 
+                  }} 
+                  onSelectBlocks={(ids) => setSelectedBlockIds(ids)}
+                  selectedBlockIds={selectedBlockIds} 
                   lunchRule={lunchRule} eveningRule={eveningRule}
                   onSplitBlock={handleSplitBlock} onMergeBlocks={handleMergeBlocks}
                   fontSize={12} zoom={zoom} isFullScreen={isCenterFullScreen} onToggleFullScreen={() => setIsCenterFullScreen(!isCenterFullScreen)}
@@ -416,10 +459,12 @@ const App: React.FC = () => {
             <div onMouseDown={() => handleResizerStart('right')} className="absolute left-0 top-0 bottom-0 w-1 px-1 cursor-col-resize z-[60] hover:bg-indigo-500/20" />
           )}
           <DetailPanel 
-            block={selectedBlock} allBlocks={blocks} categories={categories} resources={resources}
-            onUpdate={handleUpdateBlock} onClose={() => { setSelectedBlockId(null); if (isMobile) setMobileTab('timeline'); }}
+            blocks={selectedBlocks} allBlocks={blocks} categories={categories} resources={resources}
+            onUpdate={handleUpdateBlock} onClose={() => { setSelectedBlockIds([]); if (isMobile) setMobileTab('timeline'); }}
             isOpen={isRightPanelOpen || mobileTab === 'detail'}
             onToggle={() => { if (isMobile) setMobileTab('timeline'); else setIsRightPanelOpen(!isRightPanelOpen); }}
+            onDeleteSelected={() => handleDeleteBlocks(selectedBlockIds)}
+            onDuplicateSelected={() => handleDuplicateBlocks(selectedBlockIds)}
           />
         </aside>
       </main>
@@ -434,7 +479,7 @@ const App: React.FC = () => {
               
               <div className="bg-white p-4 rounded-2xl shadow-inner border dark:border-slate-800">
                  <img 
-                    src="267263.jpg" 
+                    src="https://img2.pic.in.th/267263.jpg" 
                     alt="Thai QR Payment" 
                     className="w-64 h-auto rounded-lg mx-auto filter dark:invert-0"
                  />
