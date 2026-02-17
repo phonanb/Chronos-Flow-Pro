@@ -35,7 +35,6 @@ const App: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<MobileTab>('timeline');
   const [isCenterFullScreen, setIsCenterFullScreen] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
-  const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [isShortening, setIsShortening] = useState(false);
   const [showDonateModal, setShowDonateModal] = useState(false);
   
@@ -192,73 +191,6 @@ const App: React.FC = () => {
     setResources(snapshot.resources);
     setLunchRule(snapshot.lunchRule);
     setEveningRule(snapshot.eveningRule);
-  };
-
-  const handleAiGenerate = async () => {
-    if (isAiGenerating) return;
-    takeSnapshot(`Pre-Generation Backup`);
-    setIsAiGenerating(true);
-
-    await new Promise(resolve => setTimeout(resolve, 1800));
-
-    try {
-      let sourceBlocks = [...blocks];
-      if (sourceBlocks.length === 0) {
-        let startTime = 480; 
-        sourceBlocks = INITIAL_PROFILES.map((p, idx) => {
-          const b: TimeBlock = {
-            id: `init-${idx}`,
-            title: p.name,
-            originalTitle: p.name,
-            description: 'AI Starter Template',
-            startTime: startTime,
-            duration: p.defaultDuration,
-            categoryId: categories[0].id,
-            dependencies: idx > 0 ? [`init-${idx - 1}`] : [],
-            resourceIds: [...p.resourceIds],
-            prerequisites: [],
-            color: p.color,
-            isLocked: false,
-            lane: 0
-          };
-          startTime += p.defaultDuration + 30; 
-          return b;
-        });
-      }
-
-      const minStart = Math.min(...sourceBlocks.map(b => b.startTime));
-      const maxEnd = Math.max(...sourceBlocks.map(b => b.startTime + b.duration));
-      const jobDuration = maxEnd - minStart;
-      const repeatInterval = Math.max(jobDuration + 60, 480); 
-      const weekLimit = 7 * 24 * 60; 
-
-      const newGeneratedBlocks: TimeBlock[] = [...sourceBlocks];
-      let currentOffset = repeatInterval;
-
-      while (minStart + currentOffset + jobDuration < weekLimit) {
-        sourceBlocks.forEach(b => {
-          const newId = `ai-${Math.random().toString(36).substr(2, 5)}-${b.id}`;
-          newGeneratedBlocks.push({
-            ...b,
-            id: newId,
-            title: b.title.replace(/Lot \d+/, '') + ` Lot ${Math.floor(currentOffset / repeatInterval) + 1}`,
-            startTime: b.startTime + currentOffset,
-            dependencies: [] 
-          });
-        });
-        currentOffset += repeatInterval;
-      }
-
-      if (newGeneratedBlocks.length > 0) {
-        recordChange(newGeneratedBlocks);
-        setTimeout(() => timelineRef.current?.scrollToFirstBlock(), 500);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("The Pattern-Learning engine encountered an unexpected layout.");
-    } finally {
-      setIsAiGenerating(false);
-    }
   };
 
   const handleShare = async () => {
@@ -463,19 +395,24 @@ const App: React.FC = () => {
             eveningRule={eveningRule} onUpdateEveningRule={setEveningRule}
             isOpen={isLeftPanelOpen || mobileTab === 'sidebar'}
             onToggle={() => { if (isMobile) setMobileTab('timeline'); else setIsLeftPanelOpen(!isLeftPanelOpen); }}
-            onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule, eveningRule}), 'export.cfp', 'application/json')}
+            onExportCFP={() => downloadFile(JSON.stringify({blocks, profiles, categories, resources, lunchRule, eveningRule, groupTemplates}), 'project.cfp', 'application/json')}
             onImportCFP={(f) => {
               const r = new FileReader(); r.onload = (e) => { 
                 try { 
                   const d = JSON.parse(e.target?.result as string); 
                   if (d.blocks) setBlocks(d.blocks); 
+                  if (d.profiles) setProfiles(d.profiles);
+                  if (d.categories) setCategories(d.categories);
+                  if (d.resources) setResources(d.resources);
+                  if (d.lunchRule) setLunchRule(d.lunchRule);
+                  if (d.eveningRule) setEveningRule(d.eveningRule);
+                  if (d.groupTemplates) setGroupTemplates(d.groupTemplates);
+                  alert('Project loaded successfully!');
                 } catch(err) { alert('Invalid file format'); }
               }; r.readAsText(f);
             }}
             onExportCSV={() => downloadFile(generateCSV(blocks, categories, resources), 'schedule.csv', 'text/csv')}
             onExportPDF={handleExportPDF}
-            onAiGenerate={handleAiGenerate}
-            isAiGenerating={isAiGenerating}
             history={history}
             onTakeSnapshot={takeSnapshot}
             onRestoreSnapshot={restoreSnapshot}
@@ -529,13 +466,6 @@ const App: React.FC = () => {
                 onAddBlockAtPosition={handleAddBlockAtPosition}
                 onAddGroupAtPosition={handleAddGroupAtPosition}
               />
-              {isAiGenerating && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-dark-bg/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-6">
-                   <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin"></div>
-                   <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">Architecting Schedule...</h2>
-                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest animate-pulse">Learning Patterns from Current Layout</p>
-                </div>
-              )}
            </div>
         </div>
 

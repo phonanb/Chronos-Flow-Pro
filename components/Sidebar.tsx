@@ -2,8 +2,7 @@
 import React, { useState } from 'react';
 import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot, GroupTemplate } from '../types';
 import { COLOR_MAP } from '../constants';
-import { Plus, Coffee, Clock, Settings, Edit3, Trash2, ChevronLeft, ChevronRight, Tags, Boxes, Download, FileText, Sparkles, Loader2, History, RotateCcw, LayoutGrid } from 'lucide-react';
-import { downloadFile } from '../utils';
+import { Plus, Coffee, Clock, Settings, Edit3, Trash2, ChevronLeft, ChevronRight, Tags, Boxes, Download, FileText, History, RotateCcw, LayoutGrid, FileUp } from 'lucide-react';
 
 const InputLabel = ({ children }: { children?: React.ReactNode }) => (
   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1 tracking-wider">
@@ -32,8 +31,6 @@ interface SidebarProps {
   onImportCFP: (file: File) => void;
   onExportCSV: () => void;
   onExportPDF: () => void;
-  onAiGenerate: () => Promise<void>;
-  isAiGenerating: boolean;
   history: Snapshot[];
   onTakeSnapshot: (name?: string) => void;
   onRestoreSnapshot: (snapshot: Snapshot) => void;
@@ -43,11 +40,11 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ 
   profiles, groupTemplates, categories, resources, 
   onAddBlockFromProfile, onAddGroupFromTemplate, onDeleteGroupTemplate, onUpdateProfiles, onUpdateCategories, onUpdateResources,
-  lunchRule, onUpdateLunchRule, isOpen, onToggle,
-  onExportCSV, onExportPDF, onAiGenerate, isAiGenerating,
+  lunchRule, onUpdateLunchRule, eveningRule, onUpdateEveningRule, isOpen, onToggle,
+  onExportCFP, onImportCFP, onExportCSV, onExportPDF,
   history, onTakeSnapshot, onRestoreSnapshot, onDeleteSnapshot
 }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'groups' | 'history' | 'ai' | 'categories' | 'resources' | 'rules'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'groups' | 'history' | 'categories' | 'resources' | 'rules'>('templates');
   const [editingProfile, setEditingProfile] = useState<ProfileBlock | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -61,7 +58,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         <button onClick={() => {onToggle(); setActiveTab('templates');}} className="p-2 text-indigo-600" title="Templates"><Clock size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('groups');}} className="p-2 text-indigo-400" title="Groups"><LayoutGrid size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('history');}} className="p-2 text-slate-500" title="History"><History size={20} /></button>
-        <button onClick={() => {onToggle(); setActiveTab('ai');}} className="p-2 text-purple-600" title="AI Studio"><Sparkles size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('categories');}} className="p-2 text-blue-500" title="Categories"><Tags size={20} /></button>
         <button onClick={() => {onToggle(); setActiveTab('resources');}} className="p-2 text-emerald-500" title="Resources"><Boxes size={20} /></button>
       </div>
@@ -75,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className="w-full sidebar-container flex flex-col bg-white dark:bg-dark-surface h-full overflow-hidden transition-all shrink-0 z-50">
       <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
         <div className="flex gap-1 overflow-x-auto no-scrollbar">
-          {['templates', 'groups', 'history', 'ai', 'categories', 'resources', 'rules'].map((tab) => (
+          {['templates', 'groups', 'history', 'categories', 'resources', 'rules'].map((tab) => (
             <button 
               key={tab} 
               onClick={() => setActiveTab(tab as any)} 
@@ -85,7 +81,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               {tab === 'templates' && <Clock size={18} />}
               {tab === 'groups' && <LayoutGrid size={18} />}
               {tab === 'history' && <History size={18} />}
-              {tab === 'ai' && <Sparkles size={18} />}
               {tab === 'categories' && <Tags size={18} />}
               {tab === 'resources' && <Boxes size={18} />}
               {tab === 'rules' && <Settings size={18} />}
@@ -164,19 +159,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {activeTab === 'ai' && (
-          <div className="space-y-6">
-            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-2xl text-center">
-               <Sparkles className="mx-auto mb-3 text-purple-600" size={24} />
-               <p className="text-xs text-purple-700 dark:text-purple-300 mb-4 leading-relaxed font-medium">Synthesize an optimized weekly production plan.</p>
-               <button onClick={onAiGenerate} disabled={isAiGenerating} className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-lg ${isAiGenerating ? 'bg-slate-200 cursor-not-allowed text-slate-500' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'}`}>
-                  {isAiGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-                  {isAiGenerating ? 'Analyzing...' : 'Generate Weekly Plan'}
-               </button>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'categories' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -235,7 +217,18 @@ const Sidebar: React.FC<SidebarProps> = ({
              </div>
 
              <div className="space-y-3">
-                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Tools</h3>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm uppercase tracking-widest">Project Management</h3>
+                <div className="grid grid-cols-1 gap-2">
+                   <button onClick={onExportCFP} className="flex items-center justify-center gap-2 p-3 bg-indigo-600 text-white rounded-xl text-xs font-bold border dark:border-indigo-500 shadow-md shadow-indigo-500/20 hover:bg-indigo-700 transition-all"><Download size={14} /> Export Project (.cfp)</button>
+                   <label className="flex items-center justify-center gap-2 p-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border dark:border-slate-700 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                      <FileUp size={14} /> Import Project (.cfp)
+                      <input type="file" className="hidden" accept=".cfp" onChange={(e) => { if(e.target.files?.[0]) onImportCFP(e.target.files[0]); }} />
+                   </label>
+                </div>
+             </div>
+
+             <div className="space-y-3">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm uppercase tracking-widest">Reports</h3>
                 <div className="grid grid-cols-1 gap-2">
                    <button onClick={onExportPDF} className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold border dark:border-slate-700 shadow-sm"><FileText size={14} /> Print to PDF</button>
                    <button onClick={onExportCSV} className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold border dark:border-slate-700 shadow-sm"><Download size={14} /> Export CSV</button>
@@ -247,7 +240,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {editingProfile && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingProfile(null)}>
-          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Edit Template</h3>
              <div><InputLabel>Title</InputLabel><input className={inputClasses} value={editingProfile.name} onChange={e => setEditingProfile({...editingProfile, name: e.target.value})} /></div>
              <div className="flex gap-4">
@@ -265,7 +258,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {editingCategory && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingCategory(null)}>
-          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Edit Category</h3>
              <div><InputLabel>Name</InputLabel><input className={inputClasses} value={editingCategory.name} onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} /></div>
              <div>
@@ -291,7 +284,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {editingResource && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingResource(null)}>
-          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Edit Resource</h3>
              <div><InputLabel>Name</InputLabel><input className={inputClasses} value={editingResource.name} onChange={e => setEditingResource({...editingResource, name: e.target.value})} /></div>
              <div><InputLabel>Description</InputLabel><textarea className={`${inputClasses} h-24 resize-none`} value={editingResource.description} onChange={e => setEditingResource({...editingResource, description: e.target.value})} /></div>
