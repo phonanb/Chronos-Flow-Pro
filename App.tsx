@@ -502,7 +502,7 @@ const App: React.FC = () => {
             
             <div className="p-4 bg-white rounded-2xl shadow-inner border dark:border-slate-800 overflow-hidden">
                <img 
-                 src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://github.com/support-chronos-flow" 
+                 src="https://img2.pic.in.th/267263.jpg" 
                  alt="Donation QR Code" 
                  className="w-[240px] h-[240px] object-contain"
                />
