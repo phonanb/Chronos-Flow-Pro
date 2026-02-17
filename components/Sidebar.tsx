@@ -2,8 +2,8 @@
 import React, { useState, useRef } from 'react';
 import { ProfileBlock, Category, Resource, LunchBreakRule, EveningBreakRule, Snapshot } from '../types';
 import { COLOR_MAP } from '../constants';
-import { Plus, Coffee, Clock, Settings, Edit3, Trash2, X, ChevronLeft, ChevronRight, Tags, Boxes, GripVertical, Download, Upload, FileText, Moon, Sparkles, Loader2, History, RotateCcw } from 'lucide-react';
-import { reorder, formatTime } from '../utils';
+import { Plus, Coffee, Clock, Settings, Edit3, Trash2, ChevronLeft, ChevronRight, Tags, Boxes, Download, FileText, Sparkles, Loader2, History, RotateCcw } from 'lucide-react';
+import { downloadFile } from '../utils';
 
 const InputLabel = ({ children }: { children?: React.ReactNode }) => (
   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1 tracking-wider">
@@ -40,15 +40,14 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ 
   profiles, categories, resources, 
   onAddBlockFromProfile, onUpdateProfiles, onUpdateCategories, onUpdateResources,
-  lunchRule, onUpdateLunchRule, eveningRule, onUpdateEveningRule, isOpen, onToggle,
-  onExportCFP, onImportCFP, onExportCSV, onExportPDF, onAiGenerate, isAiGenerating,
+  lunchRule, onUpdateLunchRule, isOpen, onToggle,
+  onExportCSV, onExportPDF, onAiGenerate, isAiGenerating,
   history, onTakeSnapshot, onRestoreSnapshot, onDeleteSnapshot
 }) => {
   const [activeTab, setActiveTab] = useState<'templates' | 'history' | 'ai' | 'categories' | 'resources' | 'rules'>('templates');
   const [editingProfile, setEditingProfile] = useState<ProfileBlock | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isMobile = window.innerWidth < 1024;
 
@@ -66,7 +65,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   }
 
   const inputClasses = "w-full text-sm p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-slate-200";
-
   const colorOptions = Object.keys(COLOR_MAP);
 
   return (
@@ -143,7 +141,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="space-y-6">
             <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-2xl text-center">
                <Sparkles className="mx-auto mb-3 text-purple-600" size={24} />
-               <p className="text-xs text-purple-700 dark:text-purple-300 mb-4 leading-relaxed font-medium">Synthesize a optimized, conflict-free 7-day plan based on current profiles.</p>
+               <p className="text-xs text-purple-700 dark:text-purple-300 mb-4 leading-relaxed font-medium">Synthesize an optimized weekly production plan.</p>
                <button onClick={onAiGenerate} disabled={isAiGenerating} className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-lg ${isAiGenerating ? 'bg-slate-200 cursor-not-allowed text-slate-500' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'}`}>
                   {isAiGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                   {isAiGenerating ? 'Analyzing...' : 'Generate Weekly Plan'}
@@ -202,7 +200,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                    <input type="checkbox" checked={lunchRule.enabled} onChange={(e) => onUpdateLunchRule({ ...lunchRule, enabled: e.target.checked })} className="w-4 h-4 rounded text-indigo-600" />
                 </div>
                 {lunchRule.enabled && (
-                  <div className="space-y-3 mt-4 animate-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-3 mt-4">
                      <div><InputLabel>Start (m)</InputLabel><input type="number" step="15" className={inputClasses} value={lunchRule.startTime} onChange={(e) => onUpdateLunchRule({...lunchRule, startTime: parseInt(e.target.value)})}/></div>
                      <div><InputLabel>End (m)</InputLabel><input type="number" step="15" className={inputClasses} value={lunchRule.endTime} onChange={(e) => onUpdateLunchRule({...lunchRule, endTime: parseInt(e.target.value)})}/></div>
                   </div>
@@ -210,10 +208,10 @@ const Sidebar: React.FC<SidebarProps> = ({
              </div>
 
              <div className="space-y-3">
-                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Operational Tools</h3>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Tools</h3>
                 <div className="grid grid-cols-1 gap-2">
-                   <button onClick={onExportPDF} className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold border dark:border-slate-700 shadow-sm"><FileText size={14} /> Print Timeline to PDF</button>
-                   <button onClick={onExportCSV} className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold border dark:border-slate-700 shadow-sm"><Download size={14} /> Export Dataset (.CSV)</button>
+                   <button onClick={onExportPDF} className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold border dark:border-slate-700 shadow-sm"><FileText size={14} /> Print to PDF</button>
+                   <button onClick={onExportCSV} className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold border dark:border-slate-700 shadow-sm"><Download size={14} /> Export CSV</button>
                 </div>
              </div>
           </div>
@@ -237,7 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {editingCategory && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingCategory(null)}>
           <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
-             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Category Definition</h3>
+             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Edit Category</h3>
              <div><InputLabel>Name</InputLabel><input className={inputClasses} value={editingCategory.name} onChange={e => setEditingCategory({...editingCategory, name: e.target.value})} /></div>
              <div>
                <InputLabel>Color Profile</InputLabel>
@@ -251,7 +249,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                  ))}
                </div>
              </div>
-             {/* Fixed error: using local map variable 'c' instead of undefined 'p' */}
              <button onClick={() => { onUpdateCategories(categories.find(c => c.id === editingCategory.id) ? categories.map(c => c.id === editingCategory.id ? editingCategory : c) : [...categories, editingCategory]); setEditingCategory(null); }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Update Category</button>
           </div>
         </div>
@@ -260,10 +257,9 @@ const Sidebar: React.FC<SidebarProps> = ({
       {editingResource && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setEditingResource(null)}>
           <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
-             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Resource Definition</h3>
+             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Edit Resource</h3>
              <div><InputLabel>Name</InputLabel><input className={inputClasses} value={editingResource.name} onChange={e => setEditingResource({...editingResource, name: e.target.value})} /></div>
              <div><InputLabel>Description</InputLabel><textarea className={`${inputClasses} h-24 resize-none`} value={editingResource.description} onChange={e => setEditingResource({...editingResource, description: e.target.value})} /></div>
-             {/* Fixed error: using local map variable 'r' instead of undefined 'p' */}
              <button onClick={() => { onUpdateResources(resources.find(r => r.id === editingResource.id) ? resources.map(r => r.id === editingResource.id ? editingResource : r) : [...resources, editingResource]); setEditingResource(null); }} className="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">Save Resource</button>
           </div>
         </div>

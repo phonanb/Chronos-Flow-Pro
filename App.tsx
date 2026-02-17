@@ -4,8 +4,8 @@ import { TimeBlock, ProfileBlock, Category, Resource, LunchBreakRule, EveningBre
 import Sidebar from './components/Sidebar';
 import Timeline, { TimelineRef } from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
-import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES, DAYS_IN_WEEK } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check, Heart, X, Sparkles, Copy, Trash2, Undo2, Redo2, History } from 'lucide-react';
+import { INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Share2, Check, Undo2, Redo2, Copy, Trash2 } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -43,8 +43,8 @@ const App: React.FC = () => {
 
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
-  const [leftWidth, setLeftWidth] = useState(() => loadState('cfp_leftWidth', 260));
-  const [rightWidth, setRightWidth] = useState(() => loadState('cfp_rightWidth', 320));
+  const [leftWidth] = useState(() => loadState('cfp_leftWidth', 260));
+  const [rightWidth] = useState(() => loadState('cfp_rightWidth', 320));
 
   const timelineRef = useRef<TimelineRef>(null);
   const hasInitialScrolled = useRef(false);
@@ -55,7 +55,7 @@ const App: React.FC = () => {
       const timer = setTimeout(() => {
         timelineRef.current?.scrollToFirstBlock();
         hasInitialScrolled.current = true;
-      }, 1000);
+      }, 800);
       return () => clearTimeout(timer);
     }
   }, [blocks.length]);
@@ -71,16 +71,14 @@ const App: React.FC = () => {
     localStorage.setItem('cfp_history', JSON.stringify(history));
     localStorage.setItem('cfp_darkMode', JSON.stringify(isDarkMode));
     localStorage.setItem('cfp_zoom', JSON.stringify(zoom));
-    localStorage.setItem('cfp_leftWidth', JSON.stringify(leftWidth));
-    localStorage.setItem('cfp_rightWidth', JSON.stringify(rightWidth));
-  }, [blocks, profiles, categories, resources, lunchRule, eveningRule, history, isDarkMode, zoom, leftWidth, rightWidth]);
+  }, [blocks, profiles, categories, resources, lunchRule, eveningRule, history, isDarkMode, zoom]);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
-  // Requirement: DEL Keyboard to delete box + Undo/Redo shortcuts
+  // Keyboard support: DEL to delete, Ctrl+Z/Y for Undo/Redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -141,7 +139,7 @@ const App: React.FC = () => {
   };
 
   const restoreSnapshot = (snapshot: Snapshot) => {
-    if (!confirm(`Restore to "${snapshot.name}"? Current timeline will be archived in History.`)) return;
+    if (!confirm(`Restore to "${snapshot.name}"? Current timeline will be archived.`)) return;
     takeSnapshot(`Archive before restore`);
     setBlocks(snapshot.blocks);
     setProfiles(snapshot.profiles);
@@ -157,11 +155,8 @@ const App: React.FC = () => {
     setIsAiGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate an optimal industrial production schedule for 7 days.
-      Templates: ${JSON.stringify(profiles)}
-      Categories: ${JSON.stringify(categories)}
-      Resources: ${JSON.stringify(resources)}
-      Return as a JSON array of TimeBlock objects. Max 10080 minutes total.`;
+      const prompt = `Generate an optimized industrial production schedule for 7 days.
+      Return as a JSON array of TimeBlock objects.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
@@ -207,47 +202,32 @@ const App: React.FC = () => {
     try {
       const state = { blocks, profiles, categories, resources, lunchRule, eveningRule };
       const longUrl = `${window.location.origin}${window.location.pathname}#share=${btoa(unescape(encodeURIComponent(JSON.stringify(state))))}`;
-      
       let finalUrl = longUrl;
       
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        
-        const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
-          signal: controller.signal
-        });
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (res.ok) {
           const shortened = await res.text();
-          if (shortened && shortened.startsWith('http')) {
-            finalUrl = shortened;
-          }
+          if (shortened && shortened.startsWith('http')) finalUrl = shortened;
         }
-      } catch (e) {
-        console.warn("URL shortening failed or timed out, using long URL instead.");
-      }
+      } catch (e) { console.warn("Shortener failed, using long URL."); }
 
       await navigator.clipboard.writeText(finalUrl);
       setShareFeedback(true);
       setTimeout(() => setShareFeedback(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy to clipboard", err);
-      alert("Sharing failed: Clipboard access denied.");
-    } finally {
-      setIsShortening(false);
-    }
+    } catch (err) { alert("Clipboard access denied."); }
+    finally { setIsShortening(false); }
   };
 
   // Requirement: Scroll to first box before PDF export
   const handleExportPDF = () => {
     if (timelineRef.current) {
       timelineRef.current.scrollToFirstBlock();
-      // Wait for scroll animation and rendering to stabilize
-      setTimeout(() => {
-        window.print();
-      }, 1000);
+      setTimeout(() => { window.print(); }, 1200);
     }
   };
 
@@ -272,11 +252,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateBlock = (updated: TimeBlock) => recordChange(blocks.map(b => b.id === updated.id ? updated : b));
-  
-  const handleDeleteBlocks = (ids: string[]) => {
-    recordChange(blocks.filter(b => !ids.includes(b.id)));
-    setSelectedBlockIds([]);
-  };
+  const handleDeleteBlocks = (ids: string[]) => { recordChange(blocks.filter(b => !ids.includes(b.id))); setSelectedBlockIds([]); };
 
   const handleDuplicateBlocks = (ids: string[]) => {
     const copies = blocks.filter(b => ids.includes(b.id)).map(b => ({
