@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { TimeBlock, Category, Resource } from '../types';
 import { Link, CheckCircle2, X, ArrowDown, ChevronRight, ChevronLeft, Boxes, Clock, Layout, Hash, Tags, Copy, Trash2, FolderPlus } from 'lucide-react';
 import { formatTime } from '../utils';
+import { COLOR_MAP } from '../constants';
 
 interface DetailPanelProps {
   blocks: TimeBlock[];
@@ -78,21 +79,22 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ blocks, allBlocks, categories
 
               <div className="space-y-6">
                 <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 shadow-sm">
-                  <SectionLabel icon={Tags}>Bulk Category Edit</SectionLabel>
-                  <select 
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-900 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-bold appearance-none cursor-pointer"
-                    onChange={(e) => {
-                      const newCatId = e.target.value;
-                      const updatedBlocks = blocks.map(b => ({ ...b, categoryId: newCatId }));
-                      onUpdateBlocksBulk(updatedBlocks);
-                    }}
-                    value=""
-                  >
-                    <option value="" disabled>Change Category for all...</option>
+                  <SectionLabel icon={Tags}>Set Category for All</SectionLabel>
+                  <div className="grid grid-cols-1 gap-2">
                     {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      <button 
+                        key={cat.id} 
+                        onClick={() => {
+                          const updatedBlocks = blocks.map(b => ({ ...b, categoryId: cat.id }));
+                          onUpdateBlocksBulk(updatedBlocks);
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all group ${COLOR_MAP[cat.color]?.split(' ')[0]} border-transparent hover:border-indigo-400 dark:hover:border-indigo-600 hover:scale-[1.02]`}
+                      >
+                        <div className={`w-3 h-3 rounded-full ${COLOR_MAP[cat.color]?.split(' ')[0]} ring-2 ring-white dark:ring-slate-800`}></div>
+                        <span className="text-xs font-bold truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{cat.name}</span>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">

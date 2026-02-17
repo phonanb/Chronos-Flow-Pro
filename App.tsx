@@ -380,8 +380,8 @@ const App: React.FC = () => {
   const handleUpdateBlock = (updated: TimeBlock) => recordChange(blocks.map(b => b.id === updated.id ? updated : b));
   
   const handleUpdateBlocksBulk = (updatedSet: TimeBlock[]) => {
-    const updatedIds = new Set(updatedSet.map(u => u.id));
-    const newBlocks = blocks.map(b => updatedIds.has(b.id) ? updatedSet.find(u => u.id === b.id)! : b);
+    const updateMap = new Map(updatedSet.map(u => [u.id, u]));
+    const newBlocks = blocks.map(b => updateMap.has(b.id) ? updateMap.get(b.id)! : b);
     recordChange(newBlocks);
   };
 

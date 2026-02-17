@@ -89,7 +89,6 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     if (block.isLocked) return;
 
     let targetIds = selectedBlockIds;
-    // If we click on a block that's not selected, we switch selection to it (unless shift is pressed)
     if (!selectedBlockIds.includes(block.id)) {
       if (isShift) {
         targetIds = [...selectedBlockIds, block.id];
@@ -100,7 +99,6 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       }
     }
 
-    // Capture initial positions of all selected items
     const positions = new Map<string, { startTime: number, lane: number }>();
     blocks.forEach(b => {
       if (targetIds.includes(b.id)) {
@@ -163,13 +161,21 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       }
     }
 
-    const timeDelta = Math.round(deltaX / currentPPM / 15) * 15;
-    const laneDelta = Math.round(deltaY / laneSize);
+    const timeDeltaRaw = Math.round(deltaX / currentPPM / 15) * 15;
+    const laneDeltaRaw = Math.round(deltaY / laneSize);
+
+    // Calculate group boundaries to prevent crunching at 0 bounds
+    const initialPositionsArray = Array.from(dragState.initialPositions.values());
+    const minStart = Math.min(...initialPositionsArray.map(p => p.startTime));
+    const minLane = Math.min(...initialPositionsArray.map(p => p.lane));
+    
+    // Restrict deltas so the leading edge of the group never goes below 0
+    const timeDelta = Math.max(-minStart, timeDeltaRaw);
+    const laneDelta = Math.max(-minLane, laneDeltaRaw);
 
     const maxMinutes = DAYS_IN_WEEK * 24 * 60;
     const updatedBlocks: TimeBlock[] = [];
 
-    // Apply movement to all items that were captured at start of drag
     dragState.initialPositions.forEach((initial, id) => {
       const b = blocks.find(blk => blk.id === id);
       if (!b || b.isLocked) return;
@@ -223,7 +229,6 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     const droppedTimeMinutes = Math.max(0, Math.floor(x / currentPPM / 15) * 15);
     const droppedLane = Math.max(0, Math.floor((y - HEADER_HEIGHT) / laneSize));
     
-    // Check if it's a group template or profile block
     if (data.blocks) {
       onAddGroupAtPosition(data as GroupTemplate, droppedTimeMinutes, droppedLane);
     } else {
