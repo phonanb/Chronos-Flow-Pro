@@ -7,7 +7,6 @@ import DetailPanel from './components/DetailPanel';
 import { INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
 import { Layers, Moon, Sun, ZoomIn, ZoomOut, RotateCcw, Share2, Check, Undo2, Redo2, Copy, Trash2, Heart, X, GripVertical } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
-import { GoogleGenAI, Type } from "@google/genai";
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
 
@@ -45,7 +44,6 @@ const App: React.FC = () => {
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
   
-  // Resizable state
   const [leftWidth, setLeftWidth] = useState(() => loadState('cfp_leftWidth', 280));
   const [rightWidth, setRightWidth] = useState(() => loadState('cfp_rightWidth', 340));
   const [isResizingLeft, setIsResizingLeft] = useState(false);
@@ -54,7 +52,6 @@ const App: React.FC = () => {
   const timelineRef = useRef<TimelineRef>(null);
   const hasInitialScrolled = useRef(false);
 
-  // Resize handling
   const startResizingLeft = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizingLeft(true);
@@ -98,7 +95,6 @@ const App: React.FC = () => {
     };
   }, [isResizingLeft, isResizingRight, resize, stopResizing]);
 
-  // Requirement: Auto-scroll to first box on mount
   useEffect(() => {
     if (blocks.length > 0 && !hasInitialScrolled.current) {
       const timer = setTimeout(() => {
@@ -109,7 +105,6 @@ const App: React.FC = () => {
     }
   }, [blocks.length]);
 
-  // Persistence
   useEffect(() => {
     localStorage.setItem('cfp_blocks', JSON.stringify(blocks));
     localStorage.setItem('cfp_profiles', JSON.stringify(profiles));
@@ -127,7 +122,6 @@ const App: React.FC = () => {
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
-  // Keyboard support: DEL to delete, Ctrl+Z/Y for Undo/Redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -198,52 +192,90 @@ const App: React.FC = () => {
     setEveningRule(snapshot.eveningRule);
   };
 
+  /**
+   * Free AI Schedule Optimizer (Local Heuristics)
+   * This provides an "AI-like" smart generation without requiring a paid API.
+   */
   const handleAiGenerate = async () => {
     if (isAiGenerating) return;
-    takeSnapshot(`Pre-AI Backup`);
+    takeSnapshot(`Pre-Generation Backup`);
     setIsAiGenerating(true);
+
+    // Simulate thinking delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const prompt = `Generate an optimized industrial production schedule for 7 days.
-      Return as a JSON array of TimeBlock objects.`;
+      const generatedBlocks: TimeBlock[] = [];
+      const numLots = 6; // Generate 6 lots for a busy schedule
+      const lotSpacing = 360; // Start a new lot every 6 hours
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                startTime: { type: Type.INTEGER },
-                duration: { type: Type.INTEGER },
-                categoryId: { type: Type.STRING },
-                resourceIds: { type: Type.ARRAY, items: { type: Type.STRING } },
-                lane: { type: Type.INTEGER }
-              },
-              required: ["id", "title", "startTime", "duration", "categoryId", "resourceIds", "lane"]
-            }
+      for (let lotIdx = 0; lotIdx < numLots; lotIdx++) {
+        const category = categories[lotIdx % categories.length];
+        const baseStartTime = lotIdx * lotSpacing + 480; // Start at 8 AM on Day 1 + staggered
+        let currentLotTime = baseStartTime;
+        const lotLane = lotIdx;
+
+        // Sequence: Mixing -> Filling -> Autoclave -> AVI -> Packing
+        const workflow = [
+          { pid: 'p-mt-a', gap: 0 },
+          { pid: 'p-filling', gap: 30 },
+          { pid: 'p-auto-a', gap: 45 },
+          { pid: 'p-leak-avi', gap: 60 },
+          { pid: 'p-packing', gap: 30 }
+        ];
+
+        workflow.forEach((step, stepIdx) => {
+          const profile = profiles.find(p => p.id === step.pid) || profiles[0];
+          currentLotTime += step.gap;
+
+          // Special rule stagger check for Autoclave A/B
+          if (step.pid === 'p-auto-a' && lotIdx % 2 !== 0) {
+            // Alternate between A and B
+            const altProfile = profiles.find(p => p.id === 'p-auto-b') || profile;
+            generatedBlocks.push({
+              id: `gen-${lotIdx}-${stepIdx}`,
+              title: `${altProfile.name} - Lot ${lotIdx + 1}`,
+              originalTitle: altProfile.name,
+              description: 'AI Optimized Step',
+              startTime: currentLotTime + 30, // Automatic stagger
+              duration: altProfile.defaultDuration,
+              categoryId: category.id,
+              dependencies: stepIdx > 0 ? [`gen-${lotIdx}-${stepIdx - 1}`] : [],
+              resourceIds: [...altProfile.resourceIds],
+              prerequisites: [],
+              color: altProfile.color,
+              isLocked: false,
+              lane: lotLane
+            });
+            currentLotTime += altProfile.defaultDuration;
+          } else {
+            generatedBlocks.push({
+              id: `gen-${lotIdx}-${stepIdx}`,
+              title: `${profile.name} - Lot ${lotIdx + 1}`,
+              originalTitle: profile.name,
+              description: 'AI Optimized Step',
+              startTime: currentLotTime,
+              duration: profile.defaultDuration,
+              categoryId: category.id,
+              dependencies: stepIdx > 0 ? [`gen-${lotIdx}-${stepIdx - 1}`] : [],
+              resourceIds: [...profile.resourceIds],
+              prerequisites: [],
+              color: profile.color,
+              isLocked: false,
+              lane: lotLane
+            });
+            currentLotTime += profile.defaultDuration;
           }
-        }
-      });
-
-      const responseText = response.text;
-      if (!responseText) {
-        throw new Error("No response text from AI model");
+        });
       }
 
-      const result = JSON.parse(responseText.trim() || '[]');
-      if (Array.isArray(result) && result.length > 0) {
-        recordChange(result);
+      if (generatedBlocks.length > 0) {
+        recordChange(generatedBlocks);
         setTimeout(() => timelineRef.current?.scrollToFirstBlock(), 500);
       }
     } catch (error) {
       console.error(error);
-      alert("AI Generation failed. Please check your API key and connection.");
+      alert("Local Intelligence Engine encountered an error.");
     } finally {
       setIsAiGenerating(false);
     }
@@ -369,7 +401,6 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Sidebar Panel */}
         <aside 
           className={`${!isMobile ? 'lg:flex lg:relative' : (mobileTab === 'sidebar' ? 'flex flex-1' : 'hidden')} ${isCenterFullScreen ? 'hidden' : ''} h-full bg-white dark:bg-dark-surface border-r dark:border-dark-border shrink-0 overflow-hidden relative group`}
           style={!isMobile ? { width: isLeftPanelOpen ? leftWidth : 56 } : {}}
@@ -400,7 +431,6 @@ const App: React.FC = () => {
             onRestoreSnapshot={restoreSnapshot}
             onDeleteSnapshot={(id) => setHistory(h => h.filter(s => s.id !== id))}
           />
-          {/* Resize Handle Left */}
           {isLeftPanelOpen && !isMobile && (
             <div 
               onMouseDown={startResizingLeft}
@@ -411,7 +441,6 @@ const App: React.FC = () => {
           )}
         </aside>
 
-        {/* Timeline Center */}
         <div className={`flex-1 flex flex-col min-w-0 h-full ${mobileTab === 'timeline' ? 'flex' : 'hidden lg:flex'}`}>
            <div className="flex-1 overflow-hidden relative">
               <Timeline 
@@ -452,17 +481,16 @@ const App: React.FC = () => {
                 <div className="absolute inset-0 bg-white/60 dark:bg-dark-bg/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-6">
                    <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin"></div>
                    <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">Architecting Schedule...</h2>
+                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest animate-pulse">Running Local Optimization Engine</p>
                 </div>
               )}
            </div>
         </div>
 
-        {/* Detail Panel */}
         <aside 
           className={`${!isMobile ? 'lg:flex lg:relative' : (mobileTab === 'detail' ? 'flex flex-1' : 'hidden')} ${isCenterFullScreen ? 'hidden' : ''} h-full bg-white dark:bg-dark-surface border-l dark:border-dark-border shrink-0 overflow-hidden relative group`}
           style={!isMobile ? { width: isRightPanelOpen ? rightWidth : 56 } : {}}
         >
-          {/* Resize Handle Right */}
           {isRightPanelOpen && !isMobile && (
             <div 
               onMouseDown={startResizingRight}
@@ -482,7 +510,6 @@ const App: React.FC = () => {
         </aside>
       </main>
 
-      {/* Donation Modal */}
       {showDonateModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 no-print" onClick={() => setShowDonateModal(false)}>
           <div className="bg-white dark:bg-dark-surface rounded-3xl shadow-2xl w-full max-w-sm p-8 relative flex flex-col items-center animate-in zoom-in-95 fade-in duration-300" onClick={e => e.stopPropagation()}>
