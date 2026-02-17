@@ -5,7 +5,7 @@ import Sidebar from './components/Sidebar';
 import Timeline from './components/Timeline';
 import DetailPanel from './components/DetailPanel';
 import { START_HOUR, END_HOUR, INITIAL_PROFILES, INITIAL_CATEGORIES, INITIAL_RESOURCES } from './constants';
-import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus } from 'lucide-react';
+import { Layers, Moon, Sun, ZoomIn, ZoomOut, Library, LayoutGrid, Settings2, RotateCcw, Plus, Share2, Check } from 'lucide-react';
 import { downloadFile, generateCSV } from './utils';
 
 type MobileTab = 'sidebar' | 'timeline' | 'detail';
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [zoom, setZoom] = useState(() => loadState('cfp_zoom', 1.0));
   const [mobileTab, setMobileTab] = useState<MobileTab>('timeline');
   const [isCenterFullScreen, setIsCenterFullScreen] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState(false);
   
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(window.innerWidth > 1024);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(window.innerWidth > 1280);
@@ -39,6 +40,30 @@ const App: React.FC = () => {
   const [rightWidth, setRightWidth] = useState(() => loadState('cfp_rightWidth', 320));
 
   const resizingRef = useRef<'left' | 'right' | null>(null);
+
+  // Handle Shared URL Data
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#share=')) {
+      try {
+        const encodedData = hash.replace('#share=', '');
+        const decodedData = JSON.parse(decodeURIComponent(escape(atob(encodedData))));
+        
+        if (decodedData.blocks) setBlocks(decodedData.blocks);
+        if (decodedData.profiles) setProfiles(decodedData.profiles);
+        if (decodedData.categories) setCategories(decodedData.categories);
+        if (decodedData.resources) setResources(decodedData.resources);
+        if (decodedData.lunchRule) setLunchRule(decodedData.lunchRule);
+        if (decodedData.eveningRule) setEveningRule(decodedData.eveningRule);
+        
+        // Clear hash after loading to prevent accidental re-loads
+        window.history.replaceState(null, '', window.location.pathname);
+        alert("Configuration loaded from shared link!");
+      } catch (e) {
+        console.error("Failed to parse shared data", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('cfp_blocks', JSON.stringify(blocks));
@@ -85,6 +110,28 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const handleShare = () => {
+    const stateToShare = {
+      blocks,
+      profiles,
+      categories,
+      resources,
+      lunchRule,
+      eveningRule
+    };
+    const jsonStr = JSON.stringify(stateToShare);
+    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+    const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
+    
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setShareFeedback(true);
+      setTimeout(() => setShareFeedback(false), 2000);
+    }).catch(err => {
+      alert("Failed to copy link. Check console.");
+      console.error(err);
+    });
+  };
+
   const handleAddBlockAtPosition = (profile: ProfileBlock, startTime: number, lane: number) => {
     const newBlock: TimeBlock = {
       id: Math.random().toString(36).substr(2, 9),
@@ -120,7 +167,6 @@ const App: React.FC = () => {
     if (!block) return;
     const blockEndTime = block.startTime + block.duration;
     
-    // Check lunch first, then evening
     let splitPoint = block.startTime + Math.floor(block.duration / 2);
     if (lunchRule.enabled && block.startTime < lunchRule.endTime && blockEndTime > lunchRule.startTime) {
       splitPoint = lunchRule.startTime;
@@ -191,10 +237,17 @@ const App: React.FC = () => {
                 <button onClick={() => setZoom(Math.min(3, zoom + 0.1))} className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"><ZoomIn size={14} /></button>
              </div>
              <div className="flex items-center gap-2 border-l dark:border-slate-800 pl-4">
+                <button 
+                  onClick={handleShare} 
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${shareFeedback ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-indigo-600 text-white shadow-indigo-500/20 hover:bg-indigo-700'}`}
+                >
+                  {shareFeedback ? <Check size={16} /> : <Share2 size={16} />}
+                  <span className="hidden sm:inline">{shareFeedback ? 'Link Copied' : 'Share Workspace'}</span>
+                </button>
                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors">
                   {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
-                <button onClick={() => { if(confirm('Reset workspace?')) { localStorage.clear(); window.location.reload(); } }} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors rounded-xl"><RotateCcw size={18} /></button>
+                <button onClick={() => { if(confirm('Reset workspace?')) { localStorage.clear(); window.location.reload(); } }} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors rounded-xl" title="Reset Workspace"><RotateCcw size={18} /></button>
              </div>
           </div>
         </nav>
